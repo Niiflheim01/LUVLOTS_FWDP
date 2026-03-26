@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SvgUri } from 'react-native-svg';
 import {
   ChevronLeft,
   Globe,
@@ -110,7 +111,7 @@ export const CHARITIES: Charity[] = [
     id: 'unicef',
     name: 'UNICEF Philippines',
     tagline: 'Every child, every right, every time',
-    logoUri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Logo_of_UNICEF.svg/512px-Logo_of_UNICEF.svg.png',
+    logoUri: 'https://upload.wikimedia.org/wikipedia/commons/e/ed/Logo_of_UNICEF.svg',
     heroUri: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&q=80',
     founded: '1948',
     focus: "Children's Rights & Education",
@@ -268,6 +269,7 @@ const CHARITY_AUCTIONS: Record<string, { title: string; price: string; timeLeft:
 function CharityLogo({ logoUri, name, color }: { logoUri: string; name: string; color: string }) {
   const [failed, setFailed] = useState(false);
   const initial = name.charAt(0).toUpperCase();
+  const isSvg = logoUri.toLowerCase().endsWith('.svg');
   if (failed) {
     return (
       <LinearGradient colors={[color, color + 'BB']} style={s.logoGrad}>
@@ -277,12 +279,21 @@ function CharityLogo({ logoUri, name, color }: { logoUri: string; name: string; 
   }
   return (
     <View style={s.logoWrap}>
-      <Image
-        source={{ uri: logoUri }}
-        style={s.logoImg}
-        resizeMode="contain"
-        onError={() => setFailed(true)}
-      />
+      {isSvg ? (
+        <SvgUri
+          uri={logoUri}
+          width="90%"
+          height="90%"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Image
+          source={{ uri: logoUri }}
+          style={s.logoImg}
+          resizeMode="contain"
+          onError={() => setFailed(true)}
+        />
+      )}
     </View>
   );
 }

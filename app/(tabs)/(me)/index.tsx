@@ -153,27 +153,27 @@ export default function MeScreen() {
             </View>
             <View style={s.purchasesRow}>
               {[
-                { label: 'Active Bids', Icon: Gavel,      tab: 'active'    },
-                { label: 'Won',         Icon: Trophy,     tab: 'won'       },
-                { label: 'Lost',        Icon: XIcon,      tab: 'lost'      },
-                { label: 'Cart',        Icon: ShoppingCart, tab: 'cart' },
-              ].map(({ label, Icon, tab, badge }) => (
+                { label: 'Active Bids', Icon: Gavel,        tab: 'active', badge: undefined },
+                { label: 'Won',         Icon: Trophy,       tab: 'won',    badge: undefined },
+                { label: 'Lost',        Icon: XIcon,        tab: 'lost',   badge: undefined },
+                { label: 'Cart',        Icon: ShoppingCart, tab: 'cart',   badge: undefined },
+              ].map((action) => (
                 <Pressable
-                  key={label}
-                  onPress={() => tab === 'cart'
+                  key={action.label}
+                  onPress={() => action.tab === 'cart'
                     ? router.push('/(tabs)/(cart)' as any)
-                    : router.push({ pathname: '/(tabs)/(order)', params: { tab } } as any)
+                    : router.push({ pathname: '/(tabs)/(order)', params: { tab: action.tab } } as any)
                   }
                   style={s.purchaseAction}>
                   <View style={s.purchaseIconWrap}>
-                    <Icon size={22} color="#4289AB" />
-                    {badge && (
+                    <action.Icon size={22} color="#4289AB" />
+                    {action.badge && (
                       <View style={s.purchaseBadge}>
-                        <Text style={s.purchaseBadgeText}>{badge}</Text>
+                        <Text style={s.purchaseBadgeText}>{action.badge}</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={s.purchaseLabel}>{label}</Text>
+                  <Text style={s.purchaseLabel}>{action.label}</Text>
                 </Pressable>
               ))}
             </View>

@@ -443,6 +443,17 @@ const DEFAULT_SELLER: any = {
 
 type TabKey = 'about' | 'product' | 'followers' | 'following';
 
+const PUBLIC_FIGURE_PROFILE_MAP: Record<string, string> = {
+  pf1: '4',
+  pf2: '6',
+  pf3: '8',
+  pf4: '1',
+  pf5: '2',
+  pf6: '3',
+  pf7: '5',
+  pf8: '7',
+};
+
 /* ─── Fan card config — wider spread ─── */
 const FAN_CONFIG = [
   { rotate: '-12deg', translateX: -48, translateY: 18, zIndex: 1 },
@@ -635,7 +646,8 @@ function ExpandedGallery({
 export default function SellerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const seller = SELLER_DATA[id ?? ''] || DEFAULT_SELLER;
+  const resolvedId = PUBLIC_FIGURE_PROFILE_MAP[id ?? ''] ?? (id ?? '');
+  const seller = SELLER_DATA[resolvedId] || DEFAULT_SELLER;
   const [activeTab, setActiveTab] = useState<TabKey>('about');
   const [galleryModalVisible, setGalleryModalVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);

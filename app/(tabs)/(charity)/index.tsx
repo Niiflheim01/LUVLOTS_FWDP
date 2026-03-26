@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { Heart, Clock, Star, BadgeCheck, ChevronRight } from 'lucide-react-native';
+import { Heart, Clock, BadgeCheck, ChevronRight } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SvgUri } from 'react-native-svg';
 import { CHARITIES } from '@/app/(main)/CharityDetailScreen';
 
-type FilterKey = 'All' | 'Live' | 'Upcoming' | 'Ended';
+type CharityTabKey = 'partners' | 'live' | 'upcoming' | 'ended';
 
 const CHARITY_AUCTIONS = [
   {
@@ -55,18 +56,43 @@ const CHARITY_AUCTIONS = [
     category: 'Beauty',
     description: "Hand-signed by Bretman Rock. Proceeds benefit Cagayan de Oro scholarship programs.",
   },
+  {
+    id: 'ca4',
+    title: 'Signed Benefit Concert Jacket',
+    cause: 'Disaster Recovery Drive',
+    price: '₱11,200.00',
+    timeLeft: 'Ended',
+    imageUri: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600&q=80',
+    seller: 'Vice Ganda',
+    sellerId: '2',
+    raised: '₱460,000',
+    goal: '₱450,000',
+    status: 'Ended',
+    category: 'Fashion',
+    description: 'Charity jacket worn during a benefit show. Final proceeds were donated to post-typhoon housing assistance.',
+  },
 ];
 
-
-const FILTERS: FilterKey[] = ['All', 'Live', 'Upcoming', 'Ended'];
+const CATEGORY_TABS: { key: CharityTabKey; label: string }[] = [
+  { key: 'partners', label: 'Charity Partners' },
+  { key: 'live', label: 'Live Bids' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'ended', label: 'Impact Recap' },
+];
 
 export default function CharityScreen() {
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('All');
+  const [activeTab, setActiveTab] = useState<CharityTabKey>('partners');
   const [likedIds, setLikedIds] = useState<string[]>([]);
 
-  const filtered = CHARITY_AUCTIONS.filter(
-    (item) => activeFilter === 'All' || item.status === activeFilter
-  );
+  const statusByTab: Record<Exclude<CharityTabKey, 'partners'>, 'Live' | 'Upcoming' | 'Ended'> = {
+    live: 'Live',
+    upcoming: 'Upcoming',
+    ended: 'Ended',
+  };
+
+  const filtered = activeTab === 'partners'
+    ? []
+    : CHARITY_AUCTIONS.filter((item) => item.status === statusByTab[activeTab]);
 
   function toggleLike(id: string) {
     setLikedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
@@ -120,118 +146,128 @@ export default function CharityScreen() {
       </SafeAreaView>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Impact Banner */}
-        <LinearGradient
-          colors={['#4289AB', '#6DAFC8']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={s.impactBanner}>
-          <Heart size={20} color="#fff" fill="#fff" />
-          <Text style={s.impactText}>
-            Every bid you place goes directly to real causes. Thank you for making a difference.
-          </Text>
-        </LinearGradient>
-
         {/* Filter Tabs */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{ marginTop: 16 }}
           contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-          {FILTERS.map((f) => (
+          {CATEGORY_TABS.map((tab) => (
             <TouchableOpacity
-              key={f}
-              onPress={() => setActiveFilter(f)}
-              style={[s.filterChip, activeFilter === f && s.filterChipActive]}>
-              <Text style={[s.filterChipText, activeFilter === f && s.filterChipTextActive]}>
-                {f}
+              key={tab.key}
+              onPress={() => {
+                if (tab.key === 'upcoming') {
+                  router.push('/(tabs)/(charity)/Upcoming');
+                } else if (tab.key === 'ended') {
+                  router.push('/(tabs)/(charity)/ImpactRecap');
+                } else {
+                  setActiveTab(tab.key);
+                }
+              }}
+              style={[s.filterChip, activeTab === tab.key && s.filterChipActive]}>
+              <Text style={[s.filterChipText, activeTab === tab.key && s.filterChipTextActive]}>
+                {tab.label}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Auction Cards */}
-        <View style={{ padding: 16, gap: 16 }}>
-          {filtered.map((item, index) => (
-            <Animated.View key={item.id} entering={FadeInDown.delay(index * 100).duration(400)}>
-              <TouchableOpacity
-                onPress={() => navigateToProduct(item)}
-                style={s.auctionCard}
-                activeOpacity={0.95}>
-                {/* Image */}
-                <View style={{ position: 'relative' }}>
-                  <Image source={{ uri: item.imageUri }} style={s.cardImage} resizeMode="cover" />
-                  {/* Status Badge */}
-                  <View style={[s.statusBadge, item.status === 'Live' ? s.liveBadge : s.upcomingBadge]}>
-                    {item.status === 'Live' && <View style={s.liveDot} />}
-                    <Text style={s.statusText}>{item.status}</Text>
-                  </View>
-                  {/* Like Button */}
-                  <TouchableOpacity
-                    onPress={() => toggleLike(item.id)}
-                    style={s.likeBtn}>
-                    <Heart
-                      size={16}
-                      color={likedIds.includes(item.id) ? '#E91E63' : '#fff'}
-                      fill={likedIds.includes(item.id) ? '#E91E63' : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                  {/* Timer overlay */}
-                  {item.status === 'Live' && (
-                    <View style={s.timerOverlay}>
-                      <Clock size={11} color="#fff" />
-                      <Text style={s.timerText}>{item.timeLeft}</Text>
-                    </View>
-                  )}
-                </View>
+        {activeTab !== 'partners' && (
+          <LinearGradient
+            colors={['#4289AB', '#6DAFC8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={s.impactBanner}>
+            <Heart size={20} color="#fff" fill="#fff" />
+            <Text style={s.impactText}>
+              Every bid you place goes directly to real causes. Thank you for making a difference.
+            </Text>
+          </LinearGradient>
+        )}
 
-                {/* Info */}
-                <View style={s.cardBody}>
-                  {/* Cause Badge */}
-                  <View style={s.causeBadge}>
-                    <Heart size={10} color="#E91E63" fill="#E91E63" />
-                    <Text style={s.causeText}>{item.cause}</Text>
-                  </View>
+        {activeTab !== 'partners' && (
+          <View style={{ padding: 16, gap: 16 }}>
+            {filtered.length === 0 && (
+              <View style={s.emptyStateCard}>
+                <Text style={s.emptyStateTitle}>No auctions yet</Text>
+                <Text style={s.emptyStateText}>We are preparing more items for this category. Please check back soon.</Text>
+              </View>
+            )}
 
-                  <Text style={s.cardTitle} numberOfLines={1}>{item.title}</Text>
-
-                  {/* Seller Row */}
-                  <View style={s.sellerRow}>
-                    <BadgeCheck size={12} color="#4289AB" fill="#4289AB" />
-                    <Text style={s.sellerName}>{item.seller}</Text>
-                  </View>
-
-                  {/* Progress */}
-                  <View style={s.progressSection}>
-                    <View style={s.progressHeader}>
-                      <Text style={s.raisedLabel}>Raised: <Text style={s.raisedValue}>{item.raised}</Text></Text>
-                      <Text style={s.goalLabel}>Goal: {item.goal}</Text>
-                    </View>
-                    <View style={s.progressBar}>
-                      <View style={[s.progressFill, { width: '45%' }]} />
-                    </View>
-                  </View>
-
-                  {/* Price + Bid */}
-                  <View style={s.cardFooter}>
-                    <View>
-                      <Text style={s.bidLabel}>Current Bid</Text>
-                      <Text style={s.bidPrice}>{item.price}</Text>
+            {filtered.map((item, index) => (
+              <Animated.View key={item.id} entering={FadeInDown.delay(index * 100).duration(400)}>
+                <TouchableOpacity
+                  onPress={() => navigateToProduct(item)}
+                  style={s.auctionCard}
+                  activeOpacity={0.95}>
+                  <View style={{ position: 'relative' }}>
+                    <Image source={{ uri: item.imageUri }} style={s.cardImage} resizeMode="cover" />
+                    <View style={[
+                      s.statusBadge,
+                      item.status === 'Live' ? s.liveBadge : item.status === 'Upcoming' ? s.upcomingBadge : s.endedBadge,
+                    ]}>
+                      {item.status === 'Live' && <View style={s.liveDot} />}
+                      <Text style={s.statusText}>{item.status}</Text>
                     </View>
                     <TouchableOpacity
-                      onPress={() => navigateToBid(item)}
-                      style={s.bidBtn}>
-                      <Text style={s.bidBtnText}>Place a Bid</Text>
+                      onPress={() => toggleLike(item.id)}
+                      style={s.likeBtn}>
+                      <Heart
+                        size={16}
+                        color={likedIds.includes(item.id) ? '#E91E63' : '#fff'}
+                        fill={likedIds.includes(item.id) ? '#E91E63' : 'transparent'}
+                      />
                     </TouchableOpacity>
+                    {item.status === 'Live' && (
+                      <View style={s.timerOverlay}>
+                        <Clock size={11} color="#fff" />
+                        <Text style={s.timerText}>{item.timeLeft}</Text>
+                      </View>
+                    )}
                   </View>
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
-        </View>
 
-        {/* Charity Partners */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+                  <View style={s.cardBody}>
+                    <View style={s.causeBadge}>
+                      <Heart size={10} color="#E91E63" fill="#E91E63" />
+                      <Text style={s.causeText}>{item.cause}</Text>
+                    </View>
+
+                    <Text style={s.cardTitle} numberOfLines={1}>{item.title}</Text>
+
+                    <View style={s.sellerRow}>
+                      <BadgeCheck size={12} color="#4289AB" fill="#4289AB" />
+                      <Text style={s.sellerName}>{item.seller}</Text>
+                    </View>
+
+                    <View style={s.progressSection}>
+                      <View style={s.progressHeader}>
+                        <Text style={s.raisedLabel}>Raised: <Text style={s.raisedValue}>{item.raised}</Text></Text>
+                        <Text style={s.goalLabel}>Goal: {item.goal}</Text>
+                      </View>
+                      <View style={s.progressBar}>
+                        <View style={[s.progressFill, { width: '45%' }]} />
+                      </View>
+                    </View>
+
+                    <View style={s.cardFooter}>
+                      <View>
+                        <Text style={s.bidLabel}>Current Bid</Text>
+                        <Text style={s.bidPrice}>{item.price}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => navigateToBid(item)}
+                        style={s.bidBtn}>
+                        <Text style={s.bidBtnText}>Place a Bid</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
+        )}
+
+        <View style={{ paddingHorizontal: 16, marginTop: activeTab === 'partners' ? 16 : 0, marginBottom: 20 }}>
           <View style={s.partnersHeader}>
             <Text style={s.partnersTitle}>Our Charity Partners</Text>
             <Text style={s.partnersSubtitle}>Tap to learn more</Text>
@@ -255,7 +291,11 @@ export default function CharityScreen() {
                   {/* Logo + name */}
                   <View style={s.partnerBottom}>
                     <View style={s.partnerLogoWrap}>
-                      <Image source={{ uri: charity.logoUri }} style={s.partnerLogoImg} resizeMode="contain" />
+                      {charity.logoUri.toLowerCase().endsWith('.svg') ? (
+                        <SvgUri uri={charity.logoUri} width="90%" height="90%" />
+                      ) : (
+                        <Image source={{ uri: charity.logoUri }} style={s.partnerLogoImg} resizeMode="contain" />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.partnerName} numberOfLines={2}>{charity.name}</Text>
@@ -357,6 +397,7 @@ const s = StyleSheet.create({
   },
   liveBadge: { backgroundColor: '#E91E63' },
   upcomingBadge: { backgroundColor: '#FF9800' },
+  endedBadge: { backgroundColor: '#6B7280' },
   liveDot: {
     width: 6,
     height: 6,
@@ -455,6 +496,26 @@ const s = StyleSheet.create({
     borderRadius: 10,
   },
   bidBtnText: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: '#fff' },
+  emptyStateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5EDF2',
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+  emptyStateTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  emptyStateText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 11,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
   partnersHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',

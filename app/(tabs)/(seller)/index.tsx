@@ -50,18 +50,6 @@ const SELLERS = [
     coverUri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&q=80',
   },
   {
-    id: '4',
-    name: 'Mimiyuuuh',
-    type: 'Influencer',
-    category: 'celebrity',
-    isCelebrity: true,
-    followers: '8.1M',
-    rating: 4.7,
-    products: 35,
-    avatarUri: 'https://www.famousbirthdays.com/faces/mimiyuuuh-image.jpg',
-    coverUri: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=600&q=80',
-  },
-  {
     id: '5',
     name: 'Ivana Alawi',
     type: 'Celebrity',
@@ -72,6 +60,18 @@ const SELLERS = [
     products: 89,
     avatarUri: 'https://www.famousbirthdays.com/faces/alawi-ivana-image.jpg',
     coverUri: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&q=80',
+  },
+  {
+    id: '4',
+    name: 'Mimiyuuuh',
+    type: 'Influencer',
+    category: 'celebrity',
+    isCelebrity: true,
+    followers: '8.1M',
+    rating: 4.7,
+    products: 35,
+    avatarUri: 'https://www.famousbirthdays.com/faces/mimiyuuuh-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=600&q=80',
   },
   {
     id: '6',
@@ -108,6 +108,103 @@ const SELLERS = [
     products: 22,
     avatarUri: 'https://www.famousbirthdays.com/faces/bartolome-donnalyn-image.jpg',
     coverUri: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=600&q=80',
+  },
+  // ── Public Figures (Duplicate of Celebrities, Influencers First) ──
+  {
+    id: 'pf1',
+    name: 'Mimiyuuuh',
+    type: 'Influencer',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '8.1M',
+    rating: 4.7,
+    products: 35,
+    avatarUri: 'https://www.famousbirthdays.com/faces/mimiyuuuh-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=600&q=80',
+  },
+  {
+    id: 'pf2',
+    name: 'Bretman Rock',
+    type: 'Influencer',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '18.7M',
+    rating: 4.8,
+    products: 47,
+    avatarUri: 'https://www.famousbirthdays.com/faces/rock-bretman-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&q=80',
+  },
+  {
+    id: 'pf3',
+    name: 'Donnalyn Bartolome',
+    type: 'Influencer',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '8.6M',
+    rating: 4.6,
+    products: 22,
+    avatarUri: 'https://www.famousbirthdays.com/faces/bartolome-donnalyn-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=600&q=80',
+  },
+  {
+    id: 'pf4',
+    name: 'Anne Curtis',
+    type: 'Celebrity',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '15.1M',
+    rating: 4.9,
+    products: 58,
+    avatarUri: 'https://www.famousbirthdays.com/faces/curtis-anne-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&q=80',
+  },
+  {
+    id: 'pf5',
+    name: 'Vice Ganda',
+    type: 'Celebrity',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '8.2M',
+    rating: 4.8,
+    products: 43,
+    avatarUri: 'https://www.famousbirthdays.com/faces/ganda-vice-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1501612780327-45045538702b?w=600&q=80',
+  },
+  {
+    id: 'pf6',
+    name: 'Kathryn Bernardo',
+    type: 'Celebrity',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '17.4M',
+    rating: 4.9,
+    products: 71,
+    avatarUri: 'https://www.famousbirthdays.com/faces/bernardo-kathryn-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&q=80',
+  },
+  {
+    id: 'pf7',
+    name: 'Ivana Alawi',
+    type: 'Celebrity',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '19.3M',
+    rating: 5.0,
+    products: 89,
+    avatarUri: 'https://www.famousbirthdays.com/faces/alawi-ivana-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&q=80',
+  },
+  {
+    id: 'pf8',
+    name: 'Alex Gonzaga',
+    type: 'Celebrity',
+    category: 'public-figures',
+    isCelebrity: true,
+    followers: '12.4M',
+    rating: 4.7,
+    products: 38,
+    avatarUri: 'https://www.famousbirthdays.com/faces/gonzaga-alex-image.jpg',
+    coverUri: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&q=80',
   },
   // ── Designers ──
   {
@@ -233,17 +330,19 @@ const SELLERS = [
   },
 ];
 
-type FilterType = 'all' | 'celebrity' | 'designer' | 'sustainable';
+type FilterType = 'all' | 'celebrity' | 'public-figures' | 'designer' | 'sustainable';
 
 const FILTER_TABS: { key: FilterType; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'celebrity', label: 'Celebrities' },
+  { key: 'public-figures', label: 'Public Figures' },
   { key: 'designer', label: 'Designers' },
   { key: 'sustainable', label: 'Sustainable' },
 ];
 
 const CATEGORY_BADGES: Record<string, { color: string; bg: string }> = {
-  celebrity: { color: '#4289AB', bg: '#EBF5FB' },
+  celebrity: { color: '#E91E63', bg: '#FFF1F5' },
+  'public-figures': { color: '#4289AB', bg: '#EBF5FB' },
   designer:  { color: '#8B6914', bg: '#FEF9E7' },
   sustainable: { color: '#276749', bg: '#E9F7EF' },
 };
@@ -259,7 +358,7 @@ export default function SellersScreen() {
   });
 
   const headerTitle =
-    activeFilter === 'celebrity' ? 'Celebrities & Influencers'
+    activeFilter === 'public-figures' ? 'Public Figures'
     : activeFilter === 'designer' ? 'Designers'
     : activeFilter === 'sustainable' ? 'Sustainable Brands'
     : 'All Sellers';
@@ -317,11 +416,11 @@ export default function SellersScreen() {
               </Text>
             </View>
           )}
-          {activeFilter === 'celebrity' && (
+          {activeFilter === 'public-figures' && (
             <View style={styles.stripInner}>
               <Star size={13} color="#4289AB" />
               <Text style={[styles.stripText, { color: '#4289AB' }]}>
-                Authenticated pre-loved items from celebrities and influencers
+                Verified personalities sharing authenticated pre-loved and collectible pieces
               </Text>
             </View>
           )}
@@ -333,7 +432,7 @@ export default function SellersScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}>
         {filteredSellers.map((seller) => {
-          const badge = CATEGORY_BADGES[seller.category] ?? CATEGORY_BADGES.celebrity;
+          const badge = CATEGORY_BADGES[seller.category] ?? CATEGORY_BADGES['public-figures'];
           return (
             <Pressable
               key={seller.id}
@@ -352,7 +451,7 @@ export default function SellersScreen() {
                   <View style={styles.nameBlock}>
                     <View style={styles.nameInner}>
                       <Text style={styles.sellerName}>{seller.name}</Text>
-                      {seller.isCelebrity && <BadgeCheck size={16} color="#fff" fill="#4289AB" />}
+                      <BadgeCheck size={16} color="#fff" fill="#4289AB" />
                     </View>
                     <View style={[styles.typeBadge, { backgroundColor: badge.bg }]}>
                       <Text style={[styles.typeBadgeText, { color: badge.color }]}>{seller.type}</Text>
@@ -364,7 +463,7 @@ export default function SellersScreen() {
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
                     <Text style={styles.statValue}>{seller.followers}</Text>
-                    <Text style={styles.statLabel}>{seller.category === 'celebrity' ? 'Followers' : 'Shoppers'}</Text>
+                    <Text style={styles.statLabel}>{seller.category === 'public-figures' ? 'Followers' : 'Shoppers'}</Text>
                   </View>
                   <View style={styles.statDivider} />
                   <View style={styles.statItem}>

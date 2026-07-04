@@ -82,7 +82,7 @@ function handleQuickActionPress(action: typeof QUICK_ACTIONS[number]) {
     return;
   }
   if (action.label === 'Promotions') {
-    Alert.alert('Promotions', 'Create discount codes, flash sales, and bundle deals to boost your shop visibility.');
+    Alert.alert('Promotions', 'Create discount codes and curated bundles to boost your shop visibility.');
   } else if (action.label === 'Marketing') {
     Alert.alert('Marketing', 'Boost your listings with sponsored ads and featured placements on the LUVLOTS feed.');
   } else if (action.label === 'Shop Settings') {

@@ -23,6 +23,7 @@ web-build/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+expo-web.*.log
 
 # macOS
 .DS_Store
@@ -34,6 +35,9 @@ yarn-error.*
 
 # EAS
 *.eas.json
+
+# Supabase CLI local state
+supabase/.temp/
 
 # typescript
 *.tsbuildinfo

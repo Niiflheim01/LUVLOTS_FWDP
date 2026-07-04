@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -16,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Eye, EyeOff, Mail, User, Lock } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
+
+import { useAuth } from '@/lib/auth-context';
 
 function GoogleIcon({ size = 20 }: { size?: number }) {
   return (
@@ -39,23 +43,51 @@ function FacebookIcon({ size = 20 }: { size?: number }) {
 }
 
 export default function SignUpScreen() {
+  const { signUpWithPassword, signInWithOAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isDisabled =
-    email.trim().length === 0 || username.trim().length === 0 || password.length < 8;
+    email.trim().length === 0 || username.trim().length === 0 || password.length < 8 || submitting;
 
-  function handleSignUp() {
-    router.replace('/(tabs)/(store)');
+  async function handleSignUp() {
+    if (isDisabled) return;
+    setErrorMessage(null);
+    setSubmitting(true);
+    try {
+      await signUpWithPassword({ email, password, username });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to sign up. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleGoToLogin() {
     router.push('/(auth)/Password');
   }
 
-  function handleSocialSignUp(provider: string) {
-    router.replace('/(tabs)/(store)');
+  async function handleSocialSignUp(provider: 'google' | 'facebook') {
+    if (provider === 'facebook') {
+      Alert.alert('Coming soon', 'Facebook Login is not enabled for LUVLOTS yet.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setOauthProvider('google');
+    try {
+      await signInWithOAuth('google');
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('cancelled')) {
+        setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+      }
+    } finally {
+      setOauthProvider(null);
+    }
   }
 
   return (
@@ -130,6 +162,15 @@ export default function SignUpScreen() {
               </View>
             </Animated.View>
 
+            {/* Error message */}
+            {errorMessage ? (
+              <Animated.View entering={FadeInDown.duration(300)} style={{ marginBottom: 12 }}>
+                <Text style={{ fontFamily: 'Poppins_400Regular', fontSize: 13, color: '#FFCDD2', textAlign: 'center' }}>
+                  {errorMessage}
+                </Text>
+              </Animated.View>
+            ) : null}
+
             {/* Sign Up Button */}
             <Animated.View entering={FadeInDown.delay(500).duration(500)}>
               <Pressable
@@ -145,7 +186,11 @@ export default function SignUpScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.signUpButtonGradient}>
-                  <Text style={styles.signUpButtonText}>Sign Up</Text>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.signUpButtonText}>Sign Up</Text>
+                  )}
                 </LinearGradient>
               </Pressable>
             </Animated.View>
@@ -161,16 +206,23 @@ export default function SignUpScreen() {
             <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.socialContainer}>
               <Pressable
                 onPress={() => handleSocialSignUp('google')}
-                style={styles.socialButton}>
-                <GoogleIcon size={20} />
-                <Text style={styles.socialText}>Continue with Google</Text>
+                disabled={oauthProvider === 'google'}
+                style={[styles.socialButton, oauthProvider === 'google' && { opacity: 0.7 }]}>
+                {oauthProvider === 'google' ? (
+                  <ActivityIndicator color="#333" />
+                ) : (
+                  <>
+                    <GoogleIcon size={20} />
+                    <Text style={styles.socialText}>Continue with Google</Text>
+                  </>
+                )}
               </Pressable>
 
               <Pressable
                 onPress={() => handleSocialSignUp('facebook')}
-                style={styles.socialButtonFacebook}>
+                style={[styles.socialButtonFacebook, { opacity: 0.6 }]}>
                 <FacebookIcon size={20} />
-                <Text style={styles.socialTextFacebook}>Continue with Facebook</Text>
+                <Text style={styles.socialTextFacebook}>Continue with Facebook (Coming Soon)</Text>
               </Pressable>
             </Animated.View>
 

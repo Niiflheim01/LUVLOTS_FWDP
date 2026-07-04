@@ -1,4 +1,5 @@
 import '@/global.css';
+import '@/lib/supabase';
 import {
   Poppins_400Regular,
   Poppins_600SemiBold,
@@ -9,14 +10,17 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 
 import { NAV_THEME } from '@/lib/theme';
+import { AuthProvider } from '@/lib/auth-context';
 import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 export { ErrorBoundary } from 'expo-router';
 
 SplashScreen.preventAutoHideAsync();
+WebBrowser.maybeCompleteAuthSession();
 
 const preloadAssets = (assets: number[]) =>
   Promise.all(assets.map((asset) => Asset.fromModule(asset).downloadAsync()));
@@ -94,17 +98,20 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={NAV_THEME['light']}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(main)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(profile)" />
-        <Stack.Screen name="(seller-registration)" />
-        <Stack.Screen name="(seller-dashboard)" />
-        <Stack.Screen name="checkout" />
-        <Stack.Screen name="donation" />
-      </Stack>
+      <AuthProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(main)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(profile)" />
+          <Stack.Screen name="(seller-registration)" />
+          <Stack.Screen name="(seller-dashboard)" />
+          <Stack.Screen name="checkout" />
+          <Stack.Screen name="donation" />
+        </Stack>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
+

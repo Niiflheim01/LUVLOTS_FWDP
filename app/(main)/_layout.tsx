@@ -10,7 +10,7 @@ export default function MainLayout() {
       <Stack.Screen name="BiddingScreen" />
       <Stack.Screen name="ProductScreen" />
       <Stack.Screen name="MessagesScreen" />
-      <Stack.Screen name="WishlistScreen" />
+      <Stack.Screen name="LuvlistScreen" />
       <Stack.Screen name="CartDetailsScreen" />
       <Stack.Screen name="CharityScreen" />
       <Stack.Screen name="CheckoutScreen" />

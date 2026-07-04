@@ -121,7 +121,7 @@ export default function Profile() {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* ── Luv It featured card ── */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <Pressable onPress={() => router.push('/(main)/WishlistScreen' as any)} style={s.luvItCard}>
+          <Pressable onPress={() => router.push('/(main)/LuvlistScreen' as any)} style={s.luvItCard}>
             <LinearGradient
               colors={['#E91E63', '#FF5C8D']}
               start={{ x: 0, y: 0 }}
@@ -132,7 +132,7 @@ export default function Profile() {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={s.luvItTitle}>Luvlist</Text>
-                <Text style={s.luvItSub}>Your saved items & wishlist</Text>
+                <Text style={s.luvItSub}>Your saved items & Luvlist</Text>
               </View>
               <ChevronRight size={18} color="rgba(255,255,255,0.75)" />
             </LinearGradient>

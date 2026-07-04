@@ -24,6 +24,10 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import GCashPaymentModal from '@/components/GCashPaymentModal';
+import { useAuth } from '@/lib/auth-context';
+import { env } from '@/lib/env';
+
 const VOUCHERS: Record<string, { label: string; discount: number; type: 'percent' | 'fixed' | 'shipping' }> = {
   'WELCOME50': { label: 'Welcome Gift — 50% off', discount: 50, type: 'percent' },
   'FIRSTBUY':  { label: 'First Order — ₱200 off', discount: 200, type: 'fixed' },
@@ -39,6 +43,12 @@ const MOCK_ORDER = {
   shipping: 150,
   qty: 1,
   imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=200&q=80',
+  // G8 Pay charges are derived server-side from a real `listings` row (see
+  // supabase/functions/g8-pay-create-checkout), never from client input.
+  // This screen still runs on mock cart data, so there's no real listing
+  // behind it yet -- set this to a real listings.id (see README "Known
+  // limitations") to test the live GCash flow end-to-end.
+  listingId: '',
 };
 
 type PaymentId = 'cod' | 'gcash' | 'maya' | 'qrph';
@@ -72,9 +82,11 @@ const PAYMENT_OPTIONS = [
 
 export default function CheckoutIndex() {
   const router = useRouter();
+  const { user } = useAuth();
   const [paymentGroup, setPaymentGroup] = useState<'ewallet' | 'cod' | null>(null);
   const [walletChoice, setWalletChoice] = useState<PaymentId | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<string | null>(null);
+  const [showGCashModal, setShowGCashModal] = useState(false);
 
   function handleApplyVoucher() {
     const options = Object.keys(VOUCHERS).map((code) => ({
@@ -111,12 +123,7 @@ export default function CheckoutIndex() {
     return null;
   }
 
-  function handlePlaceOrder() {
-    const label = getPaymentLabel();
-    if (!label) {
-      Alert.alert('Select Payment', 'Please choose a payment method to continue.');
-      return;
-    }
+  function goToSuccessScreen(label: string) {
     router.replace({
       pathname: '/checkout/success',
       params: {
@@ -125,6 +132,34 @@ export default function CheckoutIndex() {
         payment: label,
       },
     } as any);
+  }
+
+  function handlePlaceOrder() {
+    const label = getPaymentLabel();
+    if (!label) {
+      Alert.alert('Select Payment', 'Please choose a payment method to continue.');
+      return;
+    }
+
+    if (paymentGroup === 'ewallet' && walletChoice === 'gcash') {
+      if (!env.enableG8Pay) {
+        Alert.alert(
+          'G8 Pay not enabled',
+          'Set EXPO_PUBLIC_ENABLE_G8_PAY=true in .env once the G8 Pay Edge Functions are deployed.',
+        );
+        return;
+      }
+      if (!user) {
+        Alert.alert('Sign in required', 'Please sign in to pay with GCash.');
+        return;
+      }
+      setShowGCashModal(true);
+      return;
+    }
+
+    // Cash on Delivery / Maya / QR Ph still use the mock flow -- only the
+    // GCash path above is wired to the real G8 Pay integration.
+    goToSuccessScreen(label);
   }
 
   return (
@@ -336,6 +371,17 @@ export default function CheckoutIndex() {
           </View>
         </SafeAreaView>
       </View>
+
+      <GCashPaymentModal
+        visible={showGCashModal}
+        listingId={MOCK_ORDER.listingId}
+        amount={total}
+        onClose={() => setShowGCashModal(false)}
+        onPaid={() => {
+          setShowGCashModal(false);
+          goToSuccessScreen('GCash');
+        }}
+      />
     </View>
   );
 }

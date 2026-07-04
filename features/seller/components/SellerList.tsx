@@ -12,7 +12,7 @@ export default function SellerList({ filter, filterText }: { filter: string; fil
     <SellerCard
       key={seller.id}
       name={seller.name}
-      source={require('../../../assets/images/seller.jpg')}
+      source={{ uri: seller.avatar }}
       type={seller.type}
     />
   ));

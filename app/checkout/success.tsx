@@ -1,9 +1,16 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, StyleSheet, ScrollView, Image, ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CheckCircle2, MapPin, Package, ChevronRight, ShoppingBag } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  MapPin,
+  Package,
+  ChevronRight,
+  ShoppingBag,
+  Clock,
+} from 'lucide-react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -15,23 +22,35 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+const PAYMENT_LOGOS: Record<string, ImageSourcePropType> = {
+  'GCash': require('@/assets/images/payment/GCash_Logo.png'),
+  'Maya':  require('@/assets/images/payment/maya.jpg'),
+  'QR Ph': require('@/assets/images/payment/QRPH.png'),
+};
+
 export default function CheckoutSuccess() {
   const params = useLocalSearchParams<{
     item?: string;
     total?: string;
     orderNum?: string;
+    payment?: string;
   }>();
 
   const item = params.item ?? "It's Showtime Jacket";
   const total = params.total ?? '12,150';
   const orderNum = params.orderNum ?? `LV-${Date.now().toString().slice(-8)}`;
+  const payment = params.payment ?? 'Cash on Delivery';
 
   const checkScale = useSharedValue(0);
   const checkOpacity = useSharedValue(0);
+  const ringScale = useSharedValue(0.6);
+  const ringOpacity = useSharedValue(0);
 
   useEffect(() => {
-    checkOpacity.value = withTiming(1, { duration: 300 });
-    checkScale.value = withDelay(80, withSpring(1.0, { damping: 20, stiffness: 160 }));
+    checkOpacity.value = withTiming(1, { duration: 250 });
+    checkScale.value = withDelay(80, withSpring(1.0, { damping: 18, stiffness: 170 }));
+    ringOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
+    ringScale.value = withDelay(200, withSpring(1.0, { damping: 22, stiffness: 120 }));
   }, []);
 
   const checkStyle = useAnimatedStyle(() => ({
@@ -39,74 +58,117 @@ export default function CheckoutSuccess() {
     transform: [{ scale: checkScale.value }],
   }));
 
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ringOpacity.value,
+    transform: [{ scale: ringScale.value }],
+  }));
+
+  const isCOD = payment === 'Cash on Delivery';
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#F5F8FA' }}>
+    <View style={{ flex: 1, backgroundColor: '#F0F3F7' }}>
+      {/* Hero header */}
       <LinearGradient
-        colors={['#4289AB', '#2C6F91']}
+        colors={['#4289AB', '#2C6F91', '#1A5070']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={s.header}>
-        <SafeAreaView edges={['top']} style={s.headerInner}>
-          <Animated.View entering={FadeIn.delay(100).duration(500)} style={s.checkWrap}>
-            <Animated.View style={checkStyle}>
-              <CheckCircle2 size={68} color="#fff" strokeWidth={1.5} />
+        style={s.hero}>
+        <SafeAreaView edges={['top']} style={s.heroInner}>
+          {/* Animated ring + check */}
+          <View style={s.iconWrap}>
+            <Animated.View style={[s.ring, ringStyle]} />
+            <Animated.View style={[s.checkWrap, checkStyle]}>
+              <CheckCircle2 size={72} color="#fff" strokeWidth={1.5} />
             </Animated.View>
-          </Animated.View>
-          <Animated.Text entering={FadeInUp.delay(300).duration(500)} style={s.successTitle}>
+          </View>
+
+          <Animated.Text entering={FadeInUp.delay(300).duration(500)} style={s.heroTitle}>
             Order Placed!
           </Animated.Text>
-          <Animated.Text entering={FadeInUp.delay(450).duration(500)} style={s.successSub}>
-            Your order is confirmed and being processed.
+          <Animated.Text entering={FadeInUp.delay(430).duration(500)} style={s.heroSub}>
+            {isCOD
+              ? 'Your order is confirmed. Pay when it arrives.'
+              : `Payment via ${payment} confirmed.`}
           </Animated.Text>
+
+          {/* Order number badge */}
+          <Animated.View entering={FadeIn.delay(550).duration(500)} style={s.orderBadge}>
+            <Text style={s.orderBadgeLabel}>Order #</Text>
+            <Text style={s.orderBadgeNum}>{orderNum}</Text>
+          </Animated.View>
         </SafeAreaView>
       </LinearGradient>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}>
 
-        {/* Order number card */}
+        {/* Payment + item card */}
         <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.card}>
-          <View style={s.orderNumRow}>
-            <Text style={s.orderNumLabel}>Order Number</Text>
-            <Text style={s.orderNumValue}>{orderNum}</Text>
+          <View style={s.cardRow}>
+            <Text style={s.cardLabel}>Item</Text>
+            <Text style={s.cardValue} numberOfLines={1}>{item}</Text>
           </View>
-          <View style={s.divider} />
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Item</Text>
-            <Text style={s.infoValue} numberOfLines={1}>{item}</Text>
+          <View style={s.cardRow}>
+            <Text style={s.cardLabel}>Amount Paid</Text>
+            <Text style={[s.cardValue, { color: '#4289AB', fontFamily: 'Poppins_700Bold' }]}>
+              ₱{total}
+            </Text>
           </View>
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Total Paid</Text>
-            <Text style={[s.infoValue, { color: '#4289AB', fontFamily: 'Poppins_700Bold' }]}>₱{total}</Text>
-          </View>
-          <View style={[s.infoRow, { marginBottom: 0 }]}>
-            <Text style={s.infoLabel}>Payment</Text>
-            <Text style={s.infoValue}>Cash On Delivery</Text>
+          <View style={[s.cardRow, { marginBottom: 0 }]}>
+            <Text style={s.cardLabel}>Payment</Text>
+            <View style={s.paymentBadge}>
+              {PAYMENT_LOGOS[payment] ? (
+                <Image
+                  source={PAYMENT_LOGOS[payment]}
+                  style={s.paymentLogo}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={s.paymentIcon}>💵</Text>
+              )}
+              <Text style={s.paymentBadgeLabel}>{payment}</Text>
+            </View>
           </View>
         </Animated.View>
 
         {/* Delivery info */}
-        <Animated.View entering={FadeInDown.delay(420).duration(400)} style={s.card}>
+        <Animated.View entering={FadeInDown.delay(400).duration(400)} style={s.card}>
           <View style={s.cardTitleRow}>
-            <MapPin size={15} color="#4289AB" />
+            <MapPin size={14} color="#4289AB" />
             <Text style={s.cardTitle}>Delivery Address</Text>
           </View>
-          <Text style={s.addressLine}>123 Roxas Boulevard, Malate</Text>
-          <Text style={s.addressSub}>Manila, 1004 Metro Manila</Text>
+          <Text style={s.addressLine}>Ian Vergara</Text>
+          <Text style={s.addressSub}>123 Roxas Boulevard, Malate, Manila, 1004 Metro Manila</Text>
           <View style={s.divider} />
           <View style={s.deliveryRow}>
-            <Package size={15} color="#9CA3AF" />
+            <Clock size={13} color="#9CA3AF" />
             <Text style={s.deliveryText}>Estimated delivery: </Text>
             <Text style={s.deliveryBold}>3–5 business days</Text>
           </View>
         </Animated.View>
 
+        {/* COD reminder */}
+        {isCOD && (
+          <Animated.View entering={FadeInDown.delay(460).duration(400)} style={s.codCard}>
+            <Text style={s.codIcon}>💵</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.codTitle}>Cash on Delivery Reminder</Text>
+              <Text style={s.codBody}>
+                Please prepare the exact amount of ₱{total} when the rider arrives.
+              </Text>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Status tracker */}
-        <Animated.View entering={FadeInDown.delay(540).duration(400)} style={s.card}>
-          <Text style={s.cardTitle}>Order Status</Text>
-          <View style={{ marginTop: 16, gap: 0 }}>
+        <Animated.View entering={FadeInDown.delay(520).duration(400)} style={s.card}>
+          <View style={s.cardTitleRow}>
+            <Package size={14} color="#4289AB" />
+            <Text style={s.cardTitle}>Order Status</Text>
+          </View>
+          <View style={{ marginTop: 12, gap: 0 }}>
             {[
               { label: 'Order Placed', sub: 'Just now', done: true },
               { label: 'Processing', sub: 'Within 24 hours', done: false },
@@ -114,12 +176,18 @@ export default function CheckoutSuccess() {
               { label: 'Delivered', sub: 'Expected in 3–5 days', done: false },
             ].map((step, i, arr) => (
               <View key={step.label} style={{ flexDirection: 'row', gap: 14 }}>
-                <View style={{ alignItems: 'center', width: 20 }}>
-                  <View style={[s.stepDot, step.done && s.stepDotDone]} />
-                  {i < arr.length - 1 && <View style={[s.stepLine, step.done && s.stepLineDone]} />}
+                <View style={{ alignItems: 'center', width: 22 }}>
+                  <View style={[s.stepDot, step.done && s.stepDotDone]}>
+                    {step.done && <View style={s.stepDotInner} />}
+                  </View>
+                  {i < arr.length - 1 && (
+                    <View style={[s.stepLine, step.done && s.stepLineDone]} />
+                  )}
                 </View>
-                <View style={{ paddingBottom: i < arr.length - 1 ? 20 : 0 }}>
-                  <Text style={[s.stepLabel, step.done && { color: '#4289AB' }]}>{step.label}</Text>
+                <View style={{ paddingBottom: i < arr.length - 1 ? 22 : 0 }}>
+                  <Text style={[s.stepLabel, step.done && { color: '#4289AB' }]}>
+                    {step.label}
+                  </Text>
                   <Text style={s.stepSub}>{step.sub}</Text>
                 </View>
               </View>
@@ -128,11 +196,11 @@ export default function CheckoutSuccess() {
         </Animated.View>
       </ScrollView>
 
-      {/* Bottom CTAs — NOT absolutely positioned, sits naturally at bottom */}
+      {/* CTAs */}
       <Animated.View entering={FadeInUp.delay(600).duration(400)} style={s.bottomBar}>
         <Pressable
           onPress={() => router.replace('/(tabs)/(order)' as any)}
-          style={({ pressed }) => [s.trackBtn, pressed && { opacity: 0.85 }]}>
+          style={({ pressed }) => [s.trackBtn, pressed && { opacity: 0.87 }]}>
           <LinearGradient
             colors={['#4289AB', '#2C6F91']}
             start={{ x: 0, y: 0 }}
@@ -156,35 +224,76 @@ export default function CheckoutSuccess() {
 }
 
 const s = StyleSheet.create({
-  header: {
-    paddingBottom: 28,
+  hero: {
+    paddingBottom: 24,
   },
-  headerInner: {
+  heroInner: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 24,
     paddingBottom: 8,
   },
-  checkWrap: {
-    marginBottom: 14,
+  iconWrap: {
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  successTitle: {
+  ring: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  checkWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 26,
+    fontSize: 28,
     color: '#fff',
     marginBottom: 6,
   },
-  successSub: {
+  heroSub: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.78)',
     textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  orderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  orderBadgeLabel: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+  },
+  orderBadgeNum: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 0.8,
   },
   card: {
     backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -199,48 +308,47 @@ const s = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 14,
+    fontSize: 13,
     color: '#1A2C3D',
   },
-  orderNumRow: {
+  cardRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  orderNumLabel: {
+  cardLabel: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     color: '#6B7280',
   },
-  orderNumValue: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 13,
-    color: '#1A2C3D',
-    letterSpacing: 0.5,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F0F4F8',
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  infoValue: {
+  cardValue: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 13,
     color: '#1A2C3D',
-    maxWidth: '60%',
+    maxWidth: '55%',
     textAlign: 'right',
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EDF4F8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  paymentLogo: {
+    width: 36,
+    height: 20,
+  },
+  paymentIcon: {
+    fontSize: 14,
+  },
+  paymentBadgeLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    color: '#4289AB',
   },
   addressLine: {
     fontFamily: 'Poppins_600SemiBold',
@@ -251,8 +359,13 @@ const s = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
     color: '#6B7280',
-    marginTop: 2,
-    marginBottom: 12,
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F4F8',
+    marginVertical: 12,
   },
   deliveryRow: {
     flexDirection: 'row',
@@ -269,18 +382,54 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: '#1A2C3D',
   },
+  codCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FFFBEB',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  codIcon: {
+    fontSize: 22,
+    marginTop: 1,
+  },
+  codTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 13,
+    color: '#92400E',
+    marginBottom: 3,
+  },
+  codBody: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 18,
+  },
   stepDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: '#E5E7EB',
     borderWidth: 2,
     borderColor: '#D1D5DB',
     marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepDotDone: {
     backgroundColor: '#4289AB',
     borderColor: '#4289AB',
+  },
+  stepDotInner: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
   },
   stepLine: {
     flex: 1,

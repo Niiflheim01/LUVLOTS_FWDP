@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { Heart, Clock, BadgeCheck, ChevronRight } from 'lucide-react-native';
+import { Heart, Clock, BadgeCheck, ChevronRight, Handshake } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -145,7 +145,7 @@ export default function CharityScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Filter Tabs */}
         <ScrollView
           horizontal
@@ -309,6 +309,25 @@ export default function CharityScreen() {
               </Animated.View>
             ))}
           </View>
+        </View>
+        {/* Become a Partner inline button */}
+        <View style={s.partnerBtnWrap}>
+          <Pressable
+            onPress={() => router.push('/(main)/BecomeAPartnerScreen' as any)}
+            style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+            <LinearGradient
+              colors={['#1A5C7A', '#4289AB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.partnerBtn}>
+              <Handshake size={20} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.partnerBtnTitle}>Become a Charity Partner</Text>
+                <Text style={s.partnerBtnSub}>Register your organization on LuvLots</Text>
+              </View>
+              <ChevronRight size={18} color="rgba(255,255,255,0.7)" />
+            </LinearGradient>
+          </Pressable>
         </View>
       </ScrollView>
     </View>
@@ -611,5 +630,30 @@ const s = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     fontSize: 9,
     color: '#4289AB',
+  },
+  partnerBtnWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  partnerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    marginBottom: 4,
+  },
+  partnerBtnTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: '#fff',
+  },
+  partnerBtnSub: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 1,
   },
 });

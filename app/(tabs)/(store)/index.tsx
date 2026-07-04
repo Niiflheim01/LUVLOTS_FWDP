@@ -36,6 +36,72 @@ import { useEffect } from 'react';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const AD_IMAGES = [
+  { src: require('@/assets/images/ads/ad1.jpg'), ratio: 1445 / 379 },
+  { src: require('@/assets/images/ads/ad2.jpg'), ratio: 1451 / 329 },
+];
+
+function AdBanner({ adIndex }: { adIndex: 0 | 1 }) {
+  const { src, ratio } = AD_IMAGES[adIndex];
+  return (
+    <Animated.View entering={FadeIn.duration(500)} style={adStyles.wrap}>
+      <View style={adStyles.adBadge}>
+        <Text style={adStyles.adBadgeText}>AD</Text>
+      </View>
+      <Image
+        source={src}
+        style={[adStyles.image, { aspectRatio: ratio }]}
+        resizeMode="cover"
+      />
+      <Text style={adStyles.sponsoredLabel}>Sponsored</Text>
+    </Animated.View>
+  );
+}
+
+const adStyles = StyleSheet.create({
+  wrap: {
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F0F3F7',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  image: {
+    width: '100%',
+    height: undefined,
+  },
+  adBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  adBadgeText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 9,
+    color: '#fff',
+    letterSpacing: 0.8,
+  },
+  sponsoredLabel: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    color: '#9CA3AF',
+    textAlign: 'right',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#fff',
+  },
+});
+
 const BANNER_DATA = [
   {
     id: '1',
@@ -607,6 +673,8 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
+        <AdBanner adIndex={0} />
+
         {/* Best Sellers / Product Grid */}
         <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.sectionWhite}>
           <View style={styles.sectionHeader}>
@@ -666,6 +734,8 @@ export default function HomeScreen() {
             ))}
           </View>
         </Animated.View>
+
+        <AdBanner adIndex={1} />
 
         {/* Trending Now */}
         <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.sectionWhite}>

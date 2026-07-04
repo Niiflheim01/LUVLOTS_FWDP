@@ -1,73 +1,184 @@
-# Minimal Template
+# Luvlots
 
-This is a [React Native](https://reactnative.dev/) project built with [Expo](https://expo.dev/) and [React Native Reusables](https://reactnativereusables.com).
-
-It was initialized using the following command:
-
-```bash
-npx react-native-reusables/cli@latest init -t luvlots
-```
-
-## Getting Started
-
-To run the development server:
-
-```bash
-    npm run dev
-    # or
-    yarn dev
-    # or
-    pnpm dev
-    # or
-    bun dev
-```
-
-This will start the Expo Dev Server. Open the app in:
-
-- **iOS**: press `i` to launch in the iOS simulator _(Mac only)_
-- **Android**: press `a` to launch in the Android emulator
-- **Web**: press `w` to run in a browser
-
-You can also scan the QR code using the [Expo Go](https://expo.dev/go) app on your device. This project fully supports running in Expo Go for quick testing on physical devices.
-
-## Adding components
-
-You can add more reusable components using the CLI:
-
-```bash
-npx react-native-reusables/cli@latest add [...components]
-```
-
-> e.g. `npx react-native-reusables/cli@latest add input textarea`
-
-If you don't specify any component names, you'll be prompted to select which components to add interactively. Use the `--all` flag to install all available components at once.
-
-## Project Features
-
-- ⚛️ Built with [Expo Router](https://expo.dev/router)
-- 🎨 Styled with [Tailwind CSS](https://tailwindcss.com/) via [Nativewind](https://www.nativewind.dev/)
-- 📦 UI powered by [React Native Reusables](https://github.com/founded-labs/react-native-reusables)
-- 🚀 New Architecture enabled
-- 🔥 Edge to Edge enabled
-- 📱 Runs on iOS, Android, and Web
-
-## Learn More
-
-To dive deeper into the technologies used:
-
-- [React Native Docs](https://reactnative.dev/docs/getting-started)
-- [Expo Docs](https://docs.expo.dev/)
-- [Nativewind Docs](https://www.nativewind.dev/)
-- [React Native Reusables](https://reactnativereusables.com)
-
-## Deploy with EAS
-
-The easiest way to deploy your app is with [Expo Application Services (EAS)](https://expo.dev/eas).
-
-- [EAS Build](https://docs.expo.dev/build/introduction/)
-- [EAS Updates](https://docs.expo.dev/eas-update/introduction/)
-- [EAS Submit](https://docs.expo.dev/submit/introduction/)
+A React Native / Expo mobile marketplace app featuring celebrity-seller storefronts, charity auctions, live selling, and a full cart/checkout flow.
 
 ---
 
-If you enjoy using React Native Reusables, please consider giving it a ⭐ on [GitHub](https://github.com/founded-labs/react-native-reusables). Your support means a lot!
+## Prerequisites
+
+Make sure the following are installed before you run anything.
+
+### All platforms
+
+| Tool | Minimum version | How to check |
+|------|----------------|--------------|
+| Node.js | 20 LTS | `node -v` |
+| npm | 10+ (ships with Node 20) | `npm -v` |
+| Git | any | `git --version` |
+
+Install Node.js from [nodejs.org](https://nodejs.org/) (choose the **LTS** release).
+
+### Android
+
+- **Android Studio** with the Android SDK (API level 33+)
+- An Android emulator **or** a physical Android device with USB debugging enabled
+- `ANDROID_HOME` environment variable pointing to your SDK directory
+
+### iOS (Mac only)
+
+- **Xcode** 15+ from the Mac App Store
+- Xcode Command Line Tools: `xcode-select --install`
+- **CocoaPods**: `sudo gem install cocoapods`
+- An iOS simulator **or** a physical iPhone/iPad
+
+### Physical device (quick option — no emulator needed)
+
+Install **Expo Go** on your phone:
+- Android: [Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
+- iOS: [App Store](https://apps.apple.com/app/expo-go/id982107779)
+
+You can scan the QR code from `npm run dev` to open the app instantly.
+
+---
+
+## Getting started
+
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd luvlots
+
+# 2. Install dependencies
+npm install
+
+# 3. Start the dev server (clears Expo cache)
+npm run dev
+```
+
+The Metro bundler will start and print a QR code. Then:
+
+- **Expo Go (phone)** — scan the QR code
+- **Android emulator** — press `a` in the terminal
+- **iOS simulator (Mac only)** — press `i` in the terminal
+- **Web browser** — press `w` in the terminal
+
+---
+
+## Available scripts
+
+| Script | What it does |
+|--------|-------------|
+| `npm start` | Start Metro without clearing cache |
+| `npm run dev` | Start Metro and clear Expo cache (recommended after pulling changes) |
+| `npm run android` | Open on Android emulator / connected device |
+| `npm run ios` | Open on iOS simulator (Mac only) |
+| `npm run web` | Open in browser |
+| `npm run clean` | Clear Expo build cache |
+| `npm run typecheck` | Run TypeScript type checking without building |
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | [Expo](https://expo.dev) SDK 54 + New Architecture |
+| Navigation | [Expo Router](https://expo.github.io/router) v6 (file-based) |
+| Styling | [NativeWind](https://www.nativewind.dev) v4 (Tailwind for RN) |
+| Animations | [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/) v4 |
+| Icons | [Lucide React Native](https://lucide.dev) + Expo Vector Icons |
+| Fonts | Poppins (via `@expo-google-fonts/poppins`) |
+| UI Primitives | React Native Reusables / RN Primitives |
+
+---
+
+## Project structure
+
+```
+app/
+├── (auth)/          # Login, signup, onboarding, forgot password
+├── (tabs)/          # Bottom tab navigator
+│   ├── (store)/     # Home / product feed
+│   ├── (seller)/    # Celebrity & influencer sellers
+│   ├── (charity)/   # Charity auctions & impact
+│   ├── (order)/     # Order tracking
+│   ├── (cart)/      # Shopping cart
+│   └── (me)/        # Profile tab
+├── (main)/          # Full-screen modal screens (product detail, messages, wishlist…)
+├── (profile)/       # Profile management screens
+├── (seller-dashboard)/   # Seller tools
+├── (seller-registration)/# Seller onboarding
+├── checkout/        # Checkout & payment success
+└── donation/        # Donation flow
+
+components/          # Shared UI components
+features/            # Feature-scoped components and data
+lib/                 # Theme tokens, utility functions
+assets/images/       # Local assets (logos, onboarding, payment logos, icons)
+```
+
+---
+
+## Troubleshooting
+
+### "Metro bundler failed" / Babel error on first run
+
+This usually means the Expo / Metro cache is stale. Run:
+
+```bash
+npm run clean
+npm run dev
+```
+
+If that doesn't help, do a full reset:
+
+```bash
+# macOS / Linux
+rm -rf node_modules .expo
+npm install
+npm run dev
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force node_modules, .expo
+npm install
+npm run dev
+```
+
+### Images not loading on device
+
+The app uses **Unsplash** and **randomuser.me** for content images. Ensure your device or emulator has an active internet connection.
+
+### "Unable to resolve module" error
+
+Run `npm install` again, then `npm run dev`. If you recently pulled new commits, dependencies may have changed.
+
+### Android emulator not detected
+
+Make sure the emulator is fully booted before pressing `a`. You can verify with:
+
+```bash
+adb devices
+```
+
+### iOS build fails on Mac (CocoaPods)
+
+```bash
+cd ios
+pod install
+cd ..
+npm run ios
+```
+
+---
+
+## Building for release (next step — APK / IPA)
+
+This project is pre-configured for [EAS Build](https://docs.expo.dev/build/introduction/):
+
+- `android.package` and `ios.bundleIdentifier` are already set to `com.luvlots.app`
+- Install EAS CLI: `npm install -g eas-cli`
+- Log in: `eas login`
+- Configure: `eas build:configure`
+- Build Android APK: `eas build -p android --profile preview`
+
+See the [EAS Build docs](https://docs.expo.dev/build/introduction/) for full details.

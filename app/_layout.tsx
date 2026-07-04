@@ -36,20 +36,10 @@ const CRITICAL_ASSETS = [
 
 // Remaining images are preloaded after initial app render
 const DEFERRED_ASSETS = [
-  require('@/assets/images/seller.jpg'),
   require('@/assets/images/seller.png'),
-  require('@/assets/images/jacket.png'),
-  require('@/assets/images/watch.png'),
   require('@/assets/images/retro-jacket.png'),
   require('@/assets/images/retro-watch.png'),
   require('@/assets/images/item.png'),
-  require('@/assets/images/gift.png'),
-  require('@/assets/images/guitar-banner.png'),
-  require('@/assets/images/profile-apl.png'),
-  require('@/assets/images/apl-portrait.png'),
-  require('@/assets/images/badge-check.png'),
-  require('@/assets/images/react-native-reusables-dark.png'),
-  require('@/assets/images/react-native-reusables-light.png'),
 ];
 
 export default function RootLayout() {

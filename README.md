@@ -526,9 +526,45 @@ pass:
   instead of silently resetting when a payment genuinely isn't confirmed
   yet.
 
+**Production build hardening (this session):**
+
+- **Fixed a silent env-var bug that shipped a broken production APK.**
+  `lib/env.ts` was reading `EXPO_PUBLIC_*` variables through an indirect
+  variable (`const runtimeEnv = process.env; ...runtimeEnv.EXPO_PUBLIC_X`)
+  instead of the literal `process.env.EXPO_PUBLIC_X` form that Expo's build
+  tooling statically inlines at build time. The indirect form silently
+  evaluated to `undefined` in every compiled bundle — no build error, no
+  warning — which meant the shipped app always showed "Supabase is not
+  configured" regardless of what was set on EAS or in `.env`. Fixed by
+  reading `process.env.EXPO_PUBLIC_X` directly in `lib/env.ts`. Verified by
+  unzipping a built `.apk`'s `assets/index.android.bundle` and confirming
+  the actual Supabase URL/key strings are present post-fix (they were
+  absent before).
+- Registered all `EXPO_PUBLIC_*` values as EAS environment variables
+  (`eas env:create`, both `preview` and `production` environments) — a
+  `.env` file is git-ignored by design and is never visible to EAS's cloud
+  build containers, so cloud builds need these registered separately from
+  local development.
+- **Root-caused a Google Sign-In failure** where, after completing Google
+  auth, the in-app browser showed `localhost refused to connect` instead
+  of returning to the app. Cause: `luvlots://auth/callback` (the release
+  build's OAuth redirect — see `lib/auth-context.tsx`) was missing from
+  Supabase Dashboard → Authentication → URL Configuration → Redirect URLs,
+  so Supabase fell back to its default, unconfigured Site URL
+  (`localhost:3000`). Fixed by adding the redirect URL in the dashboard;
+  no code change was needed. See [HANDOVER.md](HANDOVER.md) for the
+  step-by-step so this doesn't get missed again on a fresh Supabase
+  project.
+- Verified end-to-end on a real device post-fix: email sign-up, Google
+  sign-in (full round-trip back into the app), and checkout reaching the
+  GCash/Maya QR screen.
+
 ---
 
 ## Ownership transfer checklist
+
+**See [HANDOVER.md](HANDOVER.md) for the full step-by-step setup guide** —
+this section is the quick-reference version.
 
 Everything below runs on the current owner's personal Supabase, Expo/EAS,
 Google Cloud, and Ganap accounts. None of this migrates automatically —

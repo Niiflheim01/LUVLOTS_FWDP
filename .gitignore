@@ -36,6 +36,9 @@ expo-web.*.log
 # EAS
 *.eas.json
 
+# Downloaded build artifacts (APKs/AABs) - not source, don't commit
+build-output/
+
 # Supabase CLI local state
 supabase/.temp/
 

@@ -109,8 +109,22 @@ def build_story():
             bq_buf.clear()
 
     bullet_items = []
+    # Holds the list item currently being accumulated across wrapped source
+    # lines, e.g. {"type": "bullet", "text": "..."} or {"type": "number", "text": "1. ..."}.
+    pending = None
+
+    def finalize_pending():
+        nonlocal pending
+        if pending is None:
+            return
+        if pending["type"] == "bullet":
+            bullet_items.append(pending["text"])
+        else:
+            story.append(Paragraph(inline(pending["text"]), style("Num", spaceAfter=6, leftIndent=6)))
+        pending = None
 
     def flush_bullets():
+        finalize_pending()
         if bullet_items:
             story.append(ListFlowable(
                 [ListItem(Paragraph(inline(b), S_BULLET), leftIndent=14) for b in bullet_items],
@@ -214,19 +228,30 @@ def build_story():
         mnum = re.match(r"^\d+\.\s+(.*)", stripped)
         if m:
             flush_para()
-            bullet_items.append(m.group(1))
+            finalize_pending()
+            pending = {"type": "bullet", "text": m.group(1)}
             i += 1
             continue
         if mnum:
-            flush_para(); flush_bullets()
+            flush_para()
+            finalize_pending()
             # numbered items rendered as plain bold-number paragraphs to keep ordering across wraps
-            story.append(Paragraph(inline(stripped), style("Num", spaceAfter=6, leftIndent=6)))
+            pending = {"type": "number", "text": stripped}
             i += 1
             continue
 
         if stripped == "":
             flush_para()
             flush_bullets()
+            i += 1
+            continue
+
+        # Continuation of a wrapped list item (bullet or numbered step) --
+        # markdown line-wraps these without a new "-"/"1." marker, so merge
+        # into the item in progress instead of treating it as a new paragraph
+        # (which would visually read as a cut-off sentence).
+        if pending is not None:
+            pending["text"] = pending["text"].rstrip() + " " + stripped
             i += 1
             continue
 

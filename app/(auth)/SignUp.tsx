@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -16,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Eye, EyeOff, Mail, User, Lock } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
+
+import { useAuth } from '@/lib/auth-context';
 
 function GoogleIcon({ size = 20 }: { size?: number }) {
   return (
@@ -38,24 +42,81 @@ function FacebookIcon({ size = 20 }: { size?: number }) {
   );
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function SignUpScreen() {
+  const { signUpWithPassword, signInWithOAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
   const isDisabled =
-    email.trim().length === 0 || username.trim().length === 0 || password.length < 8;
+    email.trim().length === 0 ||
+    username.trim().length === 0 ||
+    password.length < 8 ||
+    !passwordsMatch ||
+    submitting;
 
-  function handleSignUp() {
-    router.replace('/(tabs)/(store)');
+  async function handleSignUp() {
+    if (submitting) return;
+    setErrorMessage(null);
+
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { needsEmailConfirmation } = await signUpWithPassword({ email, password, username });
+      if (needsEmailConfirmation) {
+        Alert.alert(
+          'Confirm your email',
+          `We sent a confirmation link to ${email.trim()}. Tap it to activate your account, then log in.`,
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/Password') }],
+        );
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to sign up. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleGoToLogin() {
     router.push('/(auth)/Password');
   }
 
-  function handleSocialSignUp(provider: string) {
-    router.replace('/(tabs)/(store)');
+  async function handleSocialSignUp(provider: 'google' | 'facebook') {
+    if (provider === 'facebook') {
+      Alert.alert('Coming soon', 'Facebook Login is not enabled for LUVLOTS yet.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setOauthProvider('google');
+    try {
+      await signInWithOAuth('google');
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('cancelled')) {
+        setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+      }
+    } finally {
+      setOauthProvider(null);
+    }
   }
 
   return (
@@ -124,11 +185,41 @@ export default function SignUpScreen() {
                   placeholderTextColor="rgba(255,255,255,0.5)"
                   style={styles.input}
                   secureTextEntry
-                  returnKeyType="send"
-                  onSubmitEditing={handleSignUp}
+                  returnKeyType="next"
                 />
               </View>
             </Animated.View>
+
+            {/* Confirm Password Input */}
+            <Animated.View entering={FadeInDown.delay(450).duration(500)}>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter password"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  style={[
+                    styles.input,
+                    confirmPassword.length > 0 && !passwordsMatch && { borderColor: '#FFCDD2' },
+                  ]}
+                  secureTextEntry
+                  returnKeyType="send"
+                  onSubmitEditing={handleSignUp}
+                />
+                {confirmPassword.length > 0 && !passwordsMatch ? (
+                  <Text style={styles.matchHint}>Passwords don't match</Text>
+                ) : null}
+              </View>
+            </Animated.View>
+
+            {/* Error message */}
+            {errorMessage ? (
+              <Animated.View entering={FadeInDown.duration(300)} style={{ marginBottom: 12 }}>
+                <Text style={{ fontFamily: 'Poppins_400Regular', fontSize: 13, color: '#FFCDD2', textAlign: 'center' }}>
+                  {errorMessage}
+                </Text>
+              </Animated.View>
+            ) : null}
 
             {/* Sign Up Button */}
             <Animated.View entering={FadeInDown.delay(500).duration(500)}>
@@ -145,7 +236,11 @@ export default function SignUpScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.signUpButtonGradient}>
-                  <Text style={styles.signUpButtonText}>Sign Up</Text>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.signUpButtonText}>Sign Up</Text>
+                  )}
                 </LinearGradient>
               </Pressable>
             </Animated.View>
@@ -161,16 +256,23 @@ export default function SignUpScreen() {
             <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.socialContainer}>
               <Pressable
                 onPress={() => handleSocialSignUp('google')}
-                style={styles.socialButton}>
-                <GoogleIcon size={20} />
-                <Text style={styles.socialText}>Continue with Google</Text>
+                disabled={oauthProvider === 'google'}
+                style={[styles.socialButton, oauthProvider === 'google' && { opacity: 0.7 }]}>
+                {oauthProvider === 'google' ? (
+                  <ActivityIndicator color="#333" />
+                ) : (
+                  <>
+                    <GoogleIcon size={20} />
+                    <Text style={styles.socialText}>Continue with Google</Text>
+                  </>
+                )}
               </Pressable>
 
               <Pressable
                 onPress={() => handleSocialSignUp('facebook')}
-                style={styles.socialButtonFacebook}>
+                style={[styles.socialButtonFacebook, { opacity: 0.6 }]}>
                 <FacebookIcon size={20} />
-                <Text style={styles.socialTextFacebook}>Continue with Facebook</Text>
+                <Text style={styles.socialTextFacebook}>Continue with Facebook (Coming Soon)</Text>
               </Pressable>
             </Animated.View>
 
@@ -236,6 +338,13 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 14,
+  },
+  matchHint: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#FFCDD2',
+    marginTop: 6,
+    marginLeft: 6,
   },
   input: {
     backgroundColor: 'rgba(255,255,255,0.15)',

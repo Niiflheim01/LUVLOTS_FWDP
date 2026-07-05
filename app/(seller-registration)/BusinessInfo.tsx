@@ -1,17 +1,76 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { Upload, User, Building2 } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Upload, User, Building2, Clock3 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { getDefaultPickupAddress } from '@/lib/addresses';
+import { registerAsSeller } from '@/lib/seller';
+import { logError } from '@/lib/observability';
+import { pickVerificationImage, uploadVerificationDocument } from '@/lib/verification';
 
 type BusinessType = 'individual' | 'business';
 
 export default function BusinessInfo() {
+  const { shopName, email, phone } = useLocalSearchParams<{ shopName: string; email: string; phone: string }>();
   const [businessType, setBusinessType] = useState<BusinessType>('individual');
+  const [idImageUri, setIdImageUri] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit() {
-    router.push('/(seller-registration)/Success');
+  async function handlePickId() {
+    setUploadingId(true);
+    try {
+      const picked = await pickVerificationImage();
+      if (picked) setIdImageUri(picked.uri);
+    } catch (error) {
+      logError(error, { area: 'BusinessInfo.handlePickId' });
+      Alert.alert('Could not add photo', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setUploadingId(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!shopName || !email || !phone) {
+      Alert.alert('Missing information', 'Please go back and complete your shop info first.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let idDocumentUrl: string | null = null;
+      if (idImageUri) {
+        idDocumentUrl = await uploadVerificationDocument(idImageUri, 'seller-id');
+      }
+
+      const pickupAddress = await getDefaultPickupAddress();
+
+      await registerAsSeller({
+        shopName,
+        shopEmail: email,
+        shopPhone: phone,
+        businessType,
+        idDocumentUrl,
+        pickupAddress: pickupAddress
+          ? {
+              full_name: pickupAddress.full_name,
+              phone: pickupAddress.phone,
+              street: pickupAddress.street,
+              city: pickupAddress.city,
+              region: pickupAddress.region,
+              postal_code: pickupAddress.postal_code,
+            }
+          : null,
+      });
+      router.push('/(seller-registration)/Success');
+    } catch (error) {
+      logError(error, { area: 'BusinessInfo.handleSubmit' });
+      Alert.alert('Could not complete registration', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -96,10 +155,26 @@ export default function BusinessInfo() {
             <Text style={[bi.sectionLabel, { marginBottom: 12 }]}>
               Upload a valid ID for faster verification
             </Text>
-            <Pressable style={bi.uploadBox}>
-              <Upload size={24} color="#ccc" />
-              <Text style={bi.uploadText}>Tap to upload</Text>
+            <Pressable style={bi.uploadBox} onPress={handlePickId} disabled={uploadingId}>
+              {idImageUri ? (
+                <Image source={{ uri: idImageUri }} style={bi.uploadPreview} />
+              ) : uploadingId ? (
+                <ActivityIndicator color="#ccc" />
+              ) : (
+                <>
+                  <Upload size={24} color="#ccc" />
+                  <Text style={bi.uploadText}>Tap to upload</Text>
+                </>
+              )}
             </Pressable>
+
+            <View style={bi.earlyAccessNote}>
+              <Clock3 size={13} color="#B8860B" />
+              <Text style={bi.earlyAccessNoteText}>
+                Full ID review isn't live yet -- you'll be approved instantly as an Early Access Seller and can start
+                listing right away. We'll follow up if full verification is needed later for payouts.
+              </Text>
+            </View>
           </View>
 
           <View style={{ height: 32 }} />
@@ -107,11 +182,11 @@ export default function BusinessInfo() {
 
         {/* Bottom Buttons */}
         <View style={bi.bottomRow}>
-          <Pressable style={bi.backBtn} onPress={() => router.back()}>
+          <Pressable style={bi.backBtn} onPress={() => router.back()} disabled={submitting}>
             <Text style={bi.backText}>Back</Text>
           </Pressable>
-          <Pressable style={bi.submitBtn} onPress={handleSubmit}>
-            <Text style={bi.submitText}>Submit</Text>
+          <Pressable style={[bi.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting}>
+            {submitting ? <ActivityIndicator color="#4289AB" /> : <Text style={bi.submitText}>Submit</Text>}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -164,8 +239,12 @@ const bi = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: '#E5E7EB',
     paddingVertical: 32,
+    overflow: 'hidden',
   },
   uploadText: { fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#9CA3AF', marginTop: 8 },
+  uploadPreview: { width: '100%', height: 140, borderRadius: 10 },
+  earlyAccessNote: { flexDirection: 'row', gap: 8, backgroundColor: '#FFF8E7', borderRadius: 10, padding: 12, marginTop: 14 },
+  earlyAccessNoteText: { flex: 1, fontFamily: 'Poppins_400Regular', fontSize: 11, color: '#8A6D1D', lineHeight: 16 },
   bottomRow: {
     flexDirection: 'row',
     gap: 12,

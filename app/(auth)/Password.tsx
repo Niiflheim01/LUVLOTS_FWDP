@@ -34,18 +34,53 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/lib/auth-context';
+
 export default function Password() {
+  const { signInWithPassword, signInWithOAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isDisabled = email.length === 0 || password.length === 0;
+  const isDisabled = email.length === 0 || password.length === 0 || submitting;
 
-  function handleLogin() {
-    router.replace('/(tabs)/(store)');
+  async function handleLogin() {
+    if (isDisabled) return;
+    setErrorMessage(null);
+    setSubmitting(true);
+    try {
+      await signInWithPassword(email, password);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to log in. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setErrorMessage(null);
+    setOauthProvider('google');
+    try {
+      await signInWithOAuth('google');
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('cancelled')) {
+        setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+      }
+    } finally {
+      setOauthProvider(null);
+    }
+  }
+
+  function handleFacebookLogin() {
+    Alert.alert('Coming soon', 'Facebook Login is not enabled for LUVLOTS yet.');
   }
 
   function handleForgotPassword() {
@@ -150,6 +185,12 @@ export default function Password() {
                   </Text>
                 </Pressable>
 
+                {errorMessage ? (
+                  <Text style={{ fontFamily: 'Poppins_400Regular', fontSize: 13, color: '#D32F2F', marginTop: 12 }}>
+                    {errorMessage}
+                  </Text>
+                ) : null}
+
                 <Pressable
                   onPress={handleLogin}
                   disabled={isDisabled}
@@ -161,9 +202,13 @@ export default function Password() {
                     alignItems: 'center',
                     marginTop: 20,
                   }}>
-                  <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 15, color: '#fff' }}>
-                    Log In
-                  </Text>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 15, color: '#fff' }}>
+                      Log In
+                    </Text>
+                  )}
                 </Pressable>
               </View>
 
@@ -179,23 +224,30 @@ export default function Password() {
               {/* Social Login Buttons */}
               <View style={{ gap: 10, marginTop: 16 }}>
                 <Pressable
-                  onPress={handleLogin}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 })}>
+                  onPress={handleGoogleLogin}
+                  disabled={oauthProvider === 'google'}
+                  style={({ pressed }) => ({ opacity: pressed || oauthProvider === 'google' ? 0.85 : 1, borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 })}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, backgroundColor: '#fff', gap: 12 }}>
-                    <GoogleIcon size={20} />
-                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 14, color: '#333' }}>
-                      Continue with Google
-                    </Text>
+                    {oauthProvider === 'google' ? (
+                      <ActivityIndicator color="#333" />
+                    ) : (
+                      <>
+                        <GoogleIcon size={20} />
+                        <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 14, color: '#333' }}>
+                          Continue with Google
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </Pressable>
 
                 <Pressable
-                  onPress={handleLogin}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: 14, shadowColor: '#1877F2', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 })}>
+                  onPress={handleFacebookLogin}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 0.5, borderRadius: 14, shadowColor: '#1877F2', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 2 })}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, backgroundColor: '#1877F2', gap: 12 }}>
                     <FacebookIcon size={20} />
                     <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 14, color: '#fff' }}>
-                      Continue with Facebook
+                      Continue with Facebook (Coming Soon)
                     </Text>
                   </View>
                 </Pressable>

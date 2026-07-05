@@ -1,41 +1,48 @@
 import { router } from 'expo-router';
 import { ChevronLeft, MapPin } from 'lucide-react-native';
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const REGIONS = [
-  { letter: 'M', name: 'Metro Manila', cities: ['Quezon City', 'Manila', 'Makati', 'Pasig', 'Taguig', 'Mandaluyong', 'Paranaque', 'Caloocan'] },
-  { letter: 'I', name: 'Ilocos Region', cities: ['Vigan', 'Laoag', 'San Fernando', 'Batac'] },
-  { letter: 'II', name: 'Cagayan Valley', cities: ['Tuguegarao', 'Cauayan', 'Ilagan'] },
-  { letter: 'III', name: 'Central Luzon', cities: ['Angeles', 'Olongapo', 'San Fernando', 'Malolos', 'Meycauayan'] },
-  { letter: 'IV-A', name: 'CALABARZON', cities: ['Antipolo', 'Bacoor', 'Calamba', 'Lucena', 'Dasmariñas'] },
-  { letter: 'V', name: 'Bicol Region', cities: ['Naga', 'Legazpi', 'Sorsogon', 'Masbate'] },
-  { letter: 'VI', name: 'Western Visayas', cities: ['Iloilo City', 'Bacolod', 'Roxas City'] },
-  { letter: 'VII', name: 'Central Visayas', cities: ['Cebu City', 'Mandaue', 'Lapu-Lapu', 'Dumaguete'] },
-  { letter: 'VIII', name: 'Eastern Visayas', cities: ['Tacloban', 'Ormoc', 'Calbayog'] },
-  { letter: 'IX', name: 'Zamboanga Peninsula', cities: ['Zamboanga City', 'Dipolog', 'Pagadian'] },
-  { letter: 'X', name: 'Northern Mindanao', cities: ['Cagayan de Oro', 'Iligan', 'Ozamiz'] },
-  { letter: 'XI', name: 'Davao Region', cities: ['Davao City', 'Panabo', 'Tagum', 'Digos'] },
-  { letter: 'XII', name: 'SOCCSKSARGEN', cities: ['General Santos', 'Koronadal', 'Cotabato City'] },
-  { letter: 'XIII', name: 'Caraga', cities: ['Butuan', 'Surigao City', 'Bayugan'] },
-];
+import { getRegionsWithCities, type RegionWithCities } from '@/lib/philippines-geo';
+import { logError } from '@/lib/observability';
+import { publishRegionSelection } from '@/lib/region-selection';
 
 export default function RegionPicker() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [regions, setRegions] = useState<RegionWithCities[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const filtered = REGIONS.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.cities.some((c) => c.toLowerCase().includes(search.toLowerCase()))
-  );
+  useEffect(() => {
+    getRegionsWithCities()
+      .then(setRegions)
+      .catch((error) => {
+        logError(error, { area: 'RegionPicker.load' });
+        setLoadError('Could not load Philippine regions. Check your connection and try again.');
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  function handleSelectCity(_regionName: string, _city: string) {
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return regions;
+    return regions
+      .map((region) => ({
+        ...region,
+        cities: region.cities.filter((c) => c.name.toLowerCase().includes(query)),
+      }))
+      .filter((region) => region.name.toLowerCase().includes(query) || region.cities.length > 0);
+  }, [regions, search]);
+
+  function handleSelectCity(regionName: string, city: string) {
+    publishRegionSelection({ region: regionName, city });
     router.back();
   }
 
-  function handleSelectRegion(_regionName: string) {
+  function handleSelectRegion(regionName: string) {
+    publishRegionSelection({ region: regionName, city: '' });
     router.back();
   }
 
@@ -62,55 +69,63 @@ export default function RegionPicker() {
         />
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Use Current Location */}
-        <Pressable style={rp.locBtn} onPress={() => router.back()}>
-          <View style={rp.locIcon}>
-            <MapPin size={16} color="#4289AB" />
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 60 }} color="#4289AB" size="large" />
+      ) : loadError ? (
+        <Text style={rp.errorText}>{loadError}</Text>
+      ) : (
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          {/* Use Current Location */}
+          <Pressable style={rp.locBtn} onPress={() => router.back()}>
+            <View style={rp.locIcon}>
+              <MapPin size={16} color="#4289AB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={rp.locTitle}>Use My Current Location</Text>
+              <Text style={rp.locSub}>Automatically detect your area</Text>
+            </View>
+          </Pressable>
+
+          {/* Region Label */}
+          <View style={rp.labelBar}>
+            <Text style={rp.labelText}>All Regions</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={rp.locTitle}>Use My Current Location</Text>
-            <Text style={rp.locSub}>Automatically detect your area</Text>
-          </View>
-        </Pressable>
 
-        {/* Region Label */}
-        <View style={rp.labelBar}>
-          <Text style={rp.labelText}>All Regions</Text>
-        </View>
+          {filtered.map((region) => (
+            <View key={region.code}>
+              <Pressable
+                onPress={() => setExpanded(expanded === region.name ? null : region.name)}
+                style={rp.regionRow}>
+                <View style={rp.regionLetterBadge}>
+                  <Text style={rp.regionLetterText} numberOfLines={1} adjustsFontSizeToFit>
+                    {region.regionName.replace('Region ', '')}
+                  </Text>
+                </View>
+                <Text style={rp.regionName}>{region.name}</Text>
+                <Text style={rp.chevron}>{expanded === region.name ? '▲' : '▼'}</Text>
+              </Pressable>
 
-        {filtered.map((region) => (
-          <View key={region.name}>
-            <Pressable
-              onPress={() => setExpanded(expanded === region.name ? null : region.name)}
-              style={rp.regionRow}>
-              <View style={rp.regionLetterBadge}>
-                <Text style={rp.regionLetterText}>{region.letter}</Text>
-              </View>
-              <Text style={rp.regionName}>{region.name}</Text>
-              <Text style={rp.chevron}>{expanded === region.name ? '▲' : '▼'}</Text>
-            </Pressable>
-
-            {expanded === region.name && (
-              <View style={rp.citiesContainer}>
-                {region.cities.map((city) => (
+              {expanded === region.name && (
+                <View style={rp.citiesContainer}>
+                  {region.cities.map((city) => (
+                    <Pressable
+                      key={city.code}
+                      onPress={() => handleSelectCity(region.name, city.name)}
+                      style={rp.cityRow}>
+                      <Text style={rp.cityText}>{city.name}</Text>
+                    </Pressable>
+                  ))}
                   <Pressable
-                    key={city}
-                    onPress={() => handleSelectCity(region.name, city)}
-                    style={rp.cityRow}>
-                    <Text style={rp.cityText}>{city}</Text>
+                    onPress={() => handleSelectRegion(region.name)}
+                    style={rp.allRegionBtn}>
+                    <Text style={rp.allRegionText}>All of {region.name}</Text>
                   </Pressable>
-                ))}
-                <Pressable
-                  onPress={() => handleSelectRegion(region.name)}
-                  style={rp.allRegionBtn}>
-                  <Text style={rp.allRegionText}>All of {region.name}</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+                </View>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -164,6 +179,14 @@ const rp = StyleSheet.create({
     fontSize: 13,
     color: '#333',
   },
+  errorText: {
+    marginTop: 40,
+    marginHorizontal: 24,
+    textAlign: 'center',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: '#EF4444',
+  },
   locBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,12 +239,13 @@ const rp = StyleSheet.create({
     gap: 12,
   },
   regionLetterBadge: {
-    width: 36,
+    width: 44,
     height: 36,
     borderRadius: 8,
     backgroundColor: '#EFF6FA',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   regionLetterText: {
     fontFamily: 'Poppins_700Bold',

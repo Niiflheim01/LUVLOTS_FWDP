@@ -1,4 +1,5 @@
 import '@/global.css';
+import '@/lib/supabase';
 import {
   Poppins_400Regular,
   Poppins_600SemiBold,
@@ -9,14 +10,18 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 
 import { NAV_THEME } from '@/lib/theme';
+import { AuthProvider } from '@/lib/auth-context';
+import { CartProvider } from '@/lib/cart-context';
 import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 export { ErrorBoundary } from 'expo-router';
 
 SplashScreen.preventAutoHideAsync();
+WebBrowser.maybeCompleteAuthSession();
 
 const preloadAssets = (assets: number[]) =>
   Promise.all(assets.map((asset) => Asset.fromModule(asset).downloadAsync()));
@@ -36,20 +41,10 @@ const CRITICAL_ASSETS = [
 
 // Remaining images are preloaded after initial app render
 const DEFERRED_ASSETS = [
-  require('@/assets/images/seller.jpg'),
   require('@/assets/images/seller.png'),
-  require('@/assets/images/jacket.png'),
-  require('@/assets/images/watch.png'),
   require('@/assets/images/retro-jacket.png'),
   require('@/assets/images/retro-watch.png'),
   require('@/assets/images/item.png'),
-  require('@/assets/images/gift.png'),
-  require('@/assets/images/guitar-banner.png'),
-  require('@/assets/images/profile-apl.png'),
-  require('@/assets/images/apl-portrait.png'),
-  require('@/assets/images/badge-check.png'),
-  require('@/assets/images/react-native-reusables-dark.png'),
-  require('@/assets/images/react-native-reusables-light.png'),
 ];
 
 export default function RootLayout() {
@@ -104,17 +99,21 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={NAV_THEME['light']}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(main)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(profile)" />
-        <Stack.Screen name="(seller-registration)" />
-        <Stack.Screen name="(seller-dashboard)" />
-        <Stack.Screen name="checkout" />
-        <Stack.Screen name="donation" />
-      </Stack>
+      <AuthProvider>
+        <CartProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(main)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(profile)" />
+            <Stack.Screen name="(seller-registration)" />
+            <Stack.Screen name="(seller-dashboard)" />
+            <Stack.Screen name="checkout" />
+          </Stack>
+        </CartProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
+

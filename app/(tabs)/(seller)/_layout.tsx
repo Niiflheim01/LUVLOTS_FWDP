@@ -5,7 +5,6 @@ export default function SellerLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" />
-      <Stack.Screen name="SellerProfileScreen" />
     </Stack>
   );
 }

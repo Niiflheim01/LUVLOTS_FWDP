@@ -1,19 +1,54 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { createAddress, getAddressById, updateAddress } from '@/lib/addresses';
+import { logError } from '@/lib/observability';
+import { onRegionSelected } from '@/lib/region-selection';
+import type { AddressLabel } from '@/types/marketplace';
+
 export default function AddAddress() {
+  const { editId, presetPickup } = useLocalSearchParams<{ editId?: string; presetPickup?: string }>();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [region, setRegion] = useState('');
+  const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [street, setStreet] = useState('');
-  const [isDefault, setIsDefault] = useState(true);
-  const [isPickup, setIsPickup] = useState(false);
-  const [label, setLabel] = useState<'Work' | 'Home' | ''>('Home');
+  const [isDefault, setIsDefault] = useState(!presetPickup);
+  const [isPickup, setIsPickup] = useState(Boolean(presetPickup));
+  const [label, setLabel] = useState<AddressLabel>('Home');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(Boolean(editId));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onRegionSelected((selection) => {
+      setRegion(selection.region);
+      setCity(selection.city);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!editId) return;
+    getAddressById(editId)
+      .then((address) => {
+        setFullName(address.full_name);
+        setPhone(address.phone);
+        setRegion(address.region ?? '');
+        setCity(address.city ?? '');
+        setPostalCode(address.postal_code ?? '');
+        setStreet(address.street);
+        setLabel(address.label);
+        setIsDefault(address.is_default);
+        setIsPickup(address.is_pickup);
+      })
+      .catch((error) => logError(error, { area: 'AddAddress.loadExisting' }))
+      .finally(() => setLoading(false));
+  }, [editId]);
 
   function validate() {
     const newErrors: Record<string, string> = {};
@@ -24,11 +59,32 @@ export default function AddAddress() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
-    Alert.alert('Success', 'Address has been saved.', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+
+    setSaving(true);
+    try {
+      const input = { fullName, phone, region, city, postalCode, street, label, isDefault, isPickup };
+      if (editId) {
+        await updateAddress(editId, input);
+      } else {
+        await createAddress(input);
+      }
+      Alert.alert('Success', 'Address has been saved.', [{ text: 'OK', onPress: () => router.back() }]);
+    } catch (error) {
+      logError(error, { area: 'AddAddress.handleSubmit' });
+      Alert.alert('Could not save address', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F5F8FA', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#4289AB" size="large" />
+      </View>
+    );
   }
 
   return (
@@ -38,7 +94,7 @@ export default function AddAddress() {
           <Pressable onPress={() => router.back()} style={a.backBtn}>
             <ChevronLeft size={22} color="#fff" />
           </Pressable>
-          <Text style={a.headerTitle}>Add New Address</Text>
+          <Text style={a.headerTitle}>{editId ? 'Edit Address' : 'Add New Address'}</Text>
           <View style={{ width: 34 }} />
         </View>
       </SafeAreaView>
@@ -83,7 +139,7 @@ export default function AddAddress() {
             onPress={() => router.push('/(profile)/RegionPicker')}
             style={a.regionRow}>
             <Text style={[a.regionText, region ? { color: '#1F2937' } : { color: '#9CA3AF' }]}>
-              {region || 'Region, Province, City, Barangay'}
+              {region ? `${city ? `${city}, ` : ''}${region}` : 'Region, Province, City, Barangay'}
             </Text>
             <ChevronRight size={16} color="#ccc" />
           </Pressable>
@@ -136,7 +192,7 @@ export default function AddAddress() {
           <View style={a.labelRow}>
             <Text style={a.toggleLabel}>Label As:</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {(['Work', 'Home'] as const).map((l) => (
+              {(['Home', 'Work', 'Other'] as const).map((l) => (
                 <Pressable
                   key={l}
                   onPress={() => setLabel(l)}
@@ -158,8 +214,8 @@ export default function AddAddress() {
 
       {/* Submit Button */}
       <View style={a.footer}>
-        <TouchableOpacity style={a.submitBtn} activeOpacity={0.8} onPress={handleSubmit}>
-          <Text style={a.submitText}>Save Address</Text>
+        <TouchableOpacity style={[a.submitBtn, saving && { opacity: 0.7 }]} activeOpacity={0.8} onPress={handleSubmit} disabled={saving}>
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={a.submitText}>Save Address</Text>}
         </TouchableOpacity>
       </View>
     </View>

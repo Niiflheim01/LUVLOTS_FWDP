@@ -21,8 +21,9 @@ export default function Success() {
 
           <Text style={sc.title}>You're now a seller!</Text>
           <Text style={sc.desc}>
-            Congratulations! Your seller account has been created. Start listing
-            your items and reach millions of buyers on LUVLOTS.
+            Congratulations! Your seller account has been created as an Early Access Seller -- start listing
+            your items right away. Full ID verification will follow once it's ready, but it won't stop you
+            from selling today.
           </Text>
         </View>
 

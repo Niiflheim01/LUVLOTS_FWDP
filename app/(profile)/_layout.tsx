@@ -28,12 +28,12 @@ export default function ProfileLayout() {
           fontSize: 17,
         },
       }}>
-      <Stack.Screen name="Profile" options={{ headerShown: false }} />
       <Stack.Screen name="EditProfile" options={{ headerShown: false }} />
       <Stack.Screen name="Settings" options={{ headerShown: false }} />
       <Stack.Screen name="Addresses" options={{ headerShown: false }} />
       <Stack.Screen name="AddAddress" options={{ headerShown: false }} />
       <Stack.Screen name="RegionPicker" options={{ headerShown: false }} />
+      <Stack.Screen name="GetVerified" options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="Purchase-History" options={{ title: 'Purchase History' }} />
       <Stack.Screen name="Auction-Calendar" options={{ title: 'Auction Calendar' }} />

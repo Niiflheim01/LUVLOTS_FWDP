@@ -2,33 +2,40 @@ import { router } from 'expo-router';
 import {
   ChevronLeft,
   ChevronRight,
-  Globe,
-  HelpCircle,
   Info,
-  Lock,
   LogOut,
   MapPin,
   Bell,
-  Shield,
-  CreditCard,
+  User,
+  KeyRound,
+  BadgeCheck,
+  Store,
+  LayoutDashboard,
+  HelpCircle,
+  FileText,
+  Pencil,
 } from 'lucide-react-native';
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/lib/auth-context';
+import { logError } from '@/lib/observability';
 
 type SettingsRowProps = {
   label: string;
   value?: string;
   Icon: React.ComponentType<{ size?: number; color?: string }>;
   onPress: () => void;
+  accentColor?: string;
 };
 
-function SettingsRow({ label, value, Icon, onPress }: SettingsRowProps) {
+function SettingsRow({ label, value, Icon, onPress, accentColor }: SettingsRowProps) {
   return (
     <Pressable onPress={onPress} style={st.row}>
       <View style={st.rowLeft}>
-        <View style={st.rowIconWrap}>
-          <Icon size={16} color="#4289AB" />
+        <View style={[st.rowIconWrap, accentColor ? { backgroundColor: `${accentColor}18` } : null]}>
+          <Icon size={16} color={accentColor ?? '#4289AB'} />
         </View>
         <Text style={st.rowLabel}>{label}</Text>
       </View>
@@ -48,16 +55,58 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
+function verificationLabel(status?: string) {
+  switch (status) {
+    case 'verified':
+      return 'Verified';
+    case 'early_access':
+      return 'Early Access';
+    case 'pending':
+      return 'Pending Review';
+    case 'rejected':
+      return 'Get Verified';
+    default:
+      return 'Not Verified';
+  }
+}
+
 export default function Settings() {
+  const { user, profile, resetPassword, signOut } = useAuth();
+  const [sendingReset, setSendingReset] = useState(false);
+
+  const displayName = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'LUVLOTS Member';
+  const isSeller = profile?.role === 'seller' || profile?.role === 'admin';
+  const isVerified = profile?.verification_status === 'verified' || profile?.verification_status === 'early_access';
+
   function handleLogout() {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => router.replace('/(auth)'),
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch {
+            router.replace('/(auth)');
+          }
+        },
       },
     ]);
+  }
+
+  async function handleChangePassword() {
+    if (!user?.email) return;
+    setSendingReset(true);
+    try {
+      await resetPassword(user.email);
+      Alert.alert('Check your email', `We sent a password reset link to ${user.email}.`);
+    } catch (error) {
+      logError(error, { area: 'Settings.handleChangePassword' });
+      Alert.alert('Could not send reset link', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSendingReset(false);
+    }
   }
 
   return (
@@ -70,45 +119,83 @@ export default function Settings() {
           <Text style={st.headerTitle}>Settings</Text>
           <View style={{ width: 34 }} />
         </View>
+
+        <Pressable onPress={() => router.push('/(profile)/EditProfile')} style={st.identityRow}>
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={st.avatar} />
+          ) : (
+            <View style={[st.avatar, st.avatarPlaceholder]}>
+              <Text style={st.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={st.identityName}>{displayName}</Text>
+              {isVerified ? <BadgeCheck size={15} color="#fff" fill="#4289AB" /> : null}
+            </View>
+            <Text style={st.identityEmail}>{user?.email ?? ''}</Text>
+          </View>
+          <View style={st.identityEditBadge}>
+            <Pencil size={12} color="#fff" />
+          </View>
+        </Pressable>
       </SafeAreaView>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        <View style={{ height: 16 }} />
-
-        <SectionHeader label="My Account" />
+        <SectionHeader label="Account" />
         <View style={st.cardGroup}>
-          <SettingsRow label="Account & Security" Icon={Lock} onPress={() =>
-            Alert.alert('Account & Security', 'Manage your password, 2-factor authentication, and linked accounts.')
-          } />
+          <SettingsRow label="Edit Profile" Icon={User} onPress={() => router.push('/(profile)/EditProfile')} />
           <SettingsRow label="My Addresses" Icon={MapPin} onPress={() => router.push('/(profile)/Addresses')} />
-          <SettingsRow label="Bank Accounts / Cards" Icon={CreditCard} onPress={() =>
-            Alert.alert('Bank Accounts / Cards', 'Link a bank account or credit/debit card to receive payouts and make payments.')
-          } />
+          <SettingsRow label="Notifications" Icon={Bell} onPress={() => router.push('/(profile)/Notifications' as any)} />
+          <SettingsRow
+            label="Change Password"
+            Icon={KeyRound}
+            onPress={handleChangePassword}
+            value={sendingReset ? 'Sending...' : undefined}
+          />
         </View>
 
-        <SectionHeader label="Settings" />
+        <SectionHeader label="Verification" />
         <View style={st.cardGroup}>
-          <SettingsRow label="Notification Settings" Icon={Bell} onPress={() => router.push('/(profile)/Notifications' as any)} />
-          <SettingsRow label="Privacy Settings" Icon={Shield} onPress={() =>
-            Alert.alert('Privacy Settings', 'Control who can see your profile, bids, and activity on LUVLOTS.')
-          } />
-          <SettingsRow label="Language" value="English" Icon={Globe} onPress={() =>
-            Alert.alert('Language', 'Select your preferred language.', [
-              { text: 'English', onPress: () => {} },
-              { text: 'Filipino', onPress: () => {} },
-              { text: 'Cancel', style: 'cancel' },
-            ])
-          } />
+          <SettingsRow
+            label="Celebrity / Influencer Badge"
+            value={verificationLabel(profile?.verification_status)}
+            Icon={BadgeCheck}
+            onPress={() => router.push('/(profile)/GetVerified' as any)}
+            accentColor="#D9AC4E"
+          />
+        </View>
+
+        <SectionHeader label="Selling" />
+        <View style={st.cardGroup}>
+          {isSeller ? (
+            <SettingsRow label="My Shop Dashboard" Icon={LayoutDashboard} onPress={() => router.push('/(seller-dashboard)' as any)} />
+          ) : (
+            <SettingsRow label="Start Selling" Icon={Store} onPress={() => router.push('/(seller-registration)/Welcome')} accentColor="#D9AC4E" />
+          )}
         </View>
 
         <SectionHeader label="Support" />
         <View style={st.cardGroup}>
-          <SettingsRow label="Help Centre" Icon={HelpCircle} onPress={() =>
-            Alert.alert('Help Centre', 'For support, email us at help@luvlots.com or visit our FAQ.', [{ text: 'OK' }])
-          } />
-          <SettingsRow label="About" Icon={Info} onPress={() =>
-            Alert.alert('About LUVLOTS', 'Version 1.0.0\n\nThe premier celebrity pre-loved auction marketplace in the Philippines.', [{ text: 'OK' }])
-          } />
+          <SettingsRow
+            label="Help Center"
+            Icon={HelpCircle}
+            onPress={() =>
+              Alert.alert('Help Center', 'Need a hand? Email support@luvlots.app and our team will get back to you shortly.')
+            }
+          />
+          <SettingsRow
+            label="Terms & Privacy Policy"
+            Icon={FileText}
+            onPress={() => Alert.alert('Terms & Privacy Policy', 'LUVLOTS Terms of Service and Privacy Policy are available at luvlots.app/legal.')}
+          />
+          <SettingsRow
+            label="About"
+            Icon={Info}
+            onPress={() =>
+              Alert.alert('About LUVLOTS', 'Version 1.0.0\n\nThe premier celebrity pre-loved marketplace in the Philippines.', [{ text: 'OK' }])
+            }
+          />
         </View>
 
         <View style={{ marginTop: 24, paddingHorizontal: 16, paddingBottom: 40 }}>
@@ -146,6 +233,19 @@ const st = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    paddingTop: 4,
+  },
+  avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' },
+  avatarPlaceholder: { backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { fontFamily: 'Poppins_700Bold', fontSize: 18, color: '#fff' },
+  identityName: { fontFamily: 'Poppins_700Bold', fontSize: 15, color: '#fff' },
+  identityEmail: { fontFamily: 'Poppins_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  identityEditBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   cardGroup: {
     backgroundColor: '#fff',
     marginHorizontal: 12,

@@ -11,6 +11,7 @@ import { Asset } from 'expo-asset';
 
 import { NAV_THEME } from '@/lib/theme';
 import { AuthProvider } from '@/lib/auth-context';
+import { CartProvider } from '@/lib/cart-context';
 import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -99,17 +100,18 @@ export default function RootLayout() {
     <ThemeProvider value={NAV_THEME['light']}>
       <StatusBar style="light" />
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(main)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(profile)" />
-          <Stack.Screen name="(seller-registration)" />
-          <Stack.Screen name="(seller-dashboard)" />
-          <Stack.Screen name="checkout" />
-          <Stack.Screen name="donation" />
-        </Stack>
+        <CartProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(main)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(profile)" />
+            <Stack.Screen name="(seller-registration)" />
+            <Stack.Screen name="(seller-dashboard)" />
+            <Stack.Screen name="checkout" />
+          </Stack>
+        </CartProvider>
       </AuthProvider>
     </ThemeProvider>
   );

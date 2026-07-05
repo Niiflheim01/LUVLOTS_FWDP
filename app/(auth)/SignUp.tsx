@@ -42,24 +42,53 @@ function FacebookIcon({ size = 20 }: { size?: number }) {
   );
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function SignUpScreen() {
   const { signUpWithPassword, signInWithOAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
   const isDisabled =
-    email.trim().length === 0 || username.trim().length === 0 || password.length < 8 || submitting;
+    email.trim().length === 0 ||
+    username.trim().length === 0 ||
+    password.length < 8 ||
+    !passwordsMatch ||
+    submitting;
 
   async function handleSignUp() {
-    if (isDisabled) return;
+    if (submitting) return;
     setErrorMessage(null);
+
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await signUpWithPassword({ email, password, username });
+      const { needsEmailConfirmation } = await signUpWithPassword({ email, password, username });
+      if (needsEmailConfirmation) {
+        Alert.alert(
+          'Confirm your email',
+          `We sent a confirmation link to ${email.trim()}. Tap it to activate your account, then log in.`,
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/Password') }],
+        );
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to sign up. Please try again.');
     } finally {
@@ -156,9 +185,30 @@ export default function SignUpScreen() {
                   placeholderTextColor="rgba(255,255,255,0.5)"
                   style={styles.input}
                   secureTextEntry
+                  returnKeyType="next"
+                />
+              </View>
+            </Animated.View>
+
+            {/* Confirm Password Input */}
+            <Animated.View entering={FadeInDown.delay(450).duration(500)}>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter password"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  style={[
+                    styles.input,
+                    confirmPassword.length > 0 && !passwordsMatch && { borderColor: '#FFCDD2' },
+                  ]}
+                  secureTextEntry
                   returnKeyType="send"
                   onSubmitEditing={handleSignUp}
                 />
+                {confirmPassword.length > 0 && !passwordsMatch ? (
+                  <Text style={styles.matchHint}>Passwords don't match</Text>
+                ) : null}
               </View>
             </Animated.View>
 
@@ -288,6 +338,13 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 14,
+  },
+  matchHint: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#FFCDD2',
+    marginTop: 6,
+    marginLeft: 6,
   },
   input: {
     backgroundColor: 'rgba(255,255,255,0.15)',

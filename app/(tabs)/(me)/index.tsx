@@ -10,24 +10,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+
+import { useAuth } from '@/lib/auth-context';
 import {
-  Award,
+  BadgeCheck,
   Bell,
-  CalendarDays,
   ChevronRight,
   FileText,
   Heart,
   LogOut,
-  MessageCircleMore,
   Pencil,
   Settings,
-  ShoppingBag,
   Store,
   MapPin,
   LayoutDashboard,
-  Gavel,
-  Trophy,
-  X as XIcon,
+  ClipboardList,
   ShoppingCart,
 } from 'lucide-react-native';
 
@@ -68,6 +65,19 @@ function SectionLabel({ label }: { label: string }) {
 }
 
 export default function MeScreen() {
+  const { user, profile, signOut } = useAuth();
+  const displayName = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'LUVLOTS Member';
+  const isSeller = profile?.role === 'seller' || profile?.role === 'admin';
+  const isVerified = profile?.verification_status === 'verified' || profile?.verification_status === 'early_access';
+
+  async function handleLogout() {
+    try {
+      await signOut();
+    } catch {
+      router.replace('/(auth)');
+    }
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F5F8FA' }}>
       <SafeAreaView style={{ backgroundColor: '#4289AB' }} edges={['top']}>
@@ -84,10 +94,13 @@ export default function MeScreen() {
 
           <View style={s.userRow}>
             <View style={{ position: 'relative' }}>
-              <Image
-                source={{ uri: 'https://www.famousbirthdays.com/faces/pineda-allan-image.jpg' }}
-                style={s.avatar}
-              />
+              {profile?.avatar_url ? (
+                <Image source={{ uri: profile.avatar_url }} style={s.avatar} />
+              ) : (
+                <View style={[s.avatar, s.avatarPlaceholder]}>
+                  <Text style={s.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
               <Pressable
                 onPress={() => router.push('/(profile)/EditProfile')}
                 style={s.editBadge}>
@@ -95,26 +108,11 @@ export default function MeScreen() {
               </Pressable>
             </View>
             <View style={{ marginLeft: 14, flex: 1 }}>
-              <Text style={s.userName}>Apl.de.ap</Text>
-              <Text style={s.userEmail}>apl@apldeap.com</Text>
-            </View>
-          </View>
-
-          {/* Quick Stats */}
-          <View style={s.statsRow}>
-            <View style={s.statItem}>
-              <Text style={s.statNum}>5</Text>
-              <Text style={s.statLabel}>Winnings</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={s.statNum}>12</Text>
-              <Text style={s.statLabel}>Orders</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={s.statNum}>3</Text>
-              <Text style={s.statLabel}>Active Bids</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={s.userName}>{displayName}</Text>
+                {isVerified ? <BadgeCheck size={16} color="#fff" fill="#4289AB" /> : null}
+              </View>
+              <Text style={s.userEmail}>{user?.email ?? ''}</Text>
             </View>
           </View>
         </View>
@@ -141,41 +139,28 @@ export default function MeScreen() {
           </Pressable>
         </View>
 
-        {/* My Purchases */}
+        {/* Quick actions */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
           <View style={s.purchasesCard}>
-            <View style={s.purchasesHeader}>
-              <Text style={s.purchasesTitle}>My Purchases</Text>
-              <Pressable onPress={() => router.push('/(profile)/Purchase-History')} style={s.purchasesViewAll}>
-                <Text style={s.purchasesViewAllText}>View History</Text>
-                <ChevronRight size={12} color="#4289AB" />
-              </Pressable>
-            </View>
             <View style={s.purchasesRow}>
-              {[
-                { label: 'Active Bids', Icon: Gavel,        tab: 'active', badge: undefined },
-                { label: 'Won',         Icon: Trophy,       tab: 'won',    badge: undefined },
-                { label: 'Lost',        Icon: XIcon,        tab: 'lost',   badge: undefined },
-                { label: 'Cart',        Icon: ShoppingCart, tab: 'cart',   badge: undefined },
-              ].map((action) => (
-                <Pressable
-                  key={action.label}
-                  onPress={() => action.tab === 'cart'
-                    ? router.push('/(tabs)/(cart)' as any)
-                    : router.push({ pathname: '/(tabs)/(order)', params: { tab: action.tab } } as any)
-                  }
-                  style={s.purchaseAction}>
-                  <View style={s.purchaseIconWrap}>
-                    <action.Icon size={22} color="#4289AB" />
-                    {action.badge && (
-                      <View style={s.purchaseBadge}>
-                        <Text style={s.purchaseBadgeText}>{action.badge}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={s.purchaseLabel}>{action.label}</Text>
-                </Pressable>
-              ))}
+              <Pressable onPress={() => router.push('/(tabs)/(cart)' as any)} style={s.purchaseAction}>
+                <View style={s.purchaseIconWrap}>
+                  <ShoppingCart size={22} color="#4289AB" />
+                </View>
+                <Text style={s.purchaseLabel}>Cart</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/(tabs)/(order)' as any)} style={s.purchaseAction}>
+                <View style={s.purchaseIconWrap}>
+                  <ClipboardList size={22} color="#4289AB" />
+                </View>
+                <Text style={s.purchaseLabel}>My Orders</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/(profile)/Purchase-History')} style={s.purchaseAction}>
+                <View style={s.purchaseIconWrap}>
+                  <FileText size={22} color="#4289AB" />
+                </View>
+                <Text style={s.purchaseLabel}>Purchase History</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -183,18 +168,17 @@ export default function MeScreen() {
         {/* Activity Section */}
         <SectionLabel label="Activity" />
         <View style={s.cardGroup}>
-          <MenuItem label="Messages" Icon={MessageCircleMore} onPress={() => router.push('/(main)/MessagesScreen' as any)} iconColor="#4289AB" />
-          <MenuItem label="Purchase History" Icon={FileText} onPress={() => router.push('/(profile)/Purchase-History')} iconColor="#4289AB" />
-          <MenuItem label="Auction Calendar" Icon={CalendarDays} onPress={() => router.push('/(profile)/Auction-Calendar')} iconColor="#4289AB" />
-          <MenuItem label="My Winnings" Icon={Award} onPress={() => router.push('/(profile)/Winnings')} iconColor="#4289AB" />
           <MenuItem label="Notifications" Icon={Bell} onPress={() => router.push('/(profile)/Notifications')} iconColor="#4289AB" />
         </View>
 
         {/* Seller Section */}
         <SectionLabel label="Seller" />
         <View style={s.cardGroup}>
-          <MenuItem label="My Shop" Icon={LayoutDashboard} onPress={() => router.push('/(seller-dashboard)' as any)} iconColor="#4289AB" />
-          <MenuItem label="Start Selling" Icon={Store} onPress={() => router.push('/(seller-registration)/Welcome')} iconColor="#D9AC4E" accent />
+          {isSeller ? (
+            <MenuItem label="My Shop" Icon={LayoutDashboard} onPress={() => router.push('/(seller-dashboard)' as any)} iconColor="#4289AB" />
+          ) : (
+            <MenuItem label="Start Selling" Icon={Store} onPress={() => router.push('/(seller-registration)/Welcome')} iconColor="#D9AC4E" accent />
+          )}
         </View>
 
         {/* General Section */}
@@ -207,7 +191,7 @@ export default function MeScreen() {
         {/* Logout */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120 }}>
           <Pressable
-            onPress={() => router.replace('/(auth)')}
+            onPress={handleLogout}
             style={s.logoutBtn}>
             <LogOut size={16} color="#E53935" />
             <Text style={s.logoutText}>Log Out</Text>
@@ -248,6 +232,16 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
+  avatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 22,
+    color: '#fff',
+  },
   editBadge: {
     position: 'absolute',
     bottom: -2,
@@ -258,18 +252,6 @@ const s = StyleSheet.create({
   },
   userName: { fontFamily: 'Poppins_700Bold', fontSize: 17, color: '#fff' },
   userEmail: { fontFamily: 'Poppins_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  statsRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
-    padding: 12,
-    justifyContent: 'space-around',
-  },
-  statItem: { alignItems: 'center' },
-  statNum: { fontFamily: 'Poppins_700Bold', fontSize: 16, color: '#fff' },
-  statLabel: { fontFamily: 'Poppins_400Regular', fontSize: 10, color: 'rgba(255,255,255,0.6)' },
-  statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
   sectionLabelWrap: {
     paddingHorizontal: 16,
     paddingTop: 24,
@@ -328,20 +310,9 @@ const s = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  purchasesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  purchasesTitle: { fontFamily: 'Poppins_700Bold', fontSize: 14, color: '#1A2C3D' },
-  purchasesViewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  purchasesViewAllText: { fontFamily: 'Poppins_600SemiBold', fontSize: 12, color: '#4289AB' },
   purchasesRow: { flexDirection: 'row', justifyContent: 'space-around' },
   purchaseAction: { alignItems: 'center', gap: 6, flex: 1 },
   purchaseIconWrap: { position: 'relative', width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FA', alignItems: 'center', justifyContent: 'center' },
-  purchaseBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: '#E53935', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  purchaseBadgeText: { fontFamily: 'Poppins_700Bold', fontSize: 9, color: '#fff' },
   purchaseLabel: { fontFamily: 'Poppins_400Regular', fontSize: 11, color: '#374151', textAlign: 'center' },
   // Luvlist
   luvItCard: {

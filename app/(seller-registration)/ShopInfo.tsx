@@ -1,16 +1,45 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+
+import { getMyAddresses } from '@/lib/addresses';
+import { logError } from '@/lib/observability';
+import type { Address } from '@/types/marketplace';
 
 export default function ShopInfo() {
   const [shopName, setShopName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [pickupAddress, setPickupAddress] = useState<Address | null>(null);
 
   const maxShopName = 30;
+
+  useFocusEffect(
+    useCallback(() => {
+      getMyAddresses()
+        .then((addresses) => setPickupAddress(addresses.find((a) => a.is_pickup) ?? null))
+        .catch((error) => logError(error, { area: 'ShopInfo.loadPickupAddress' }));
+    }, []),
+  );
+
+  function handleNext() {
+    if (!shopName.trim() || !email.trim() || !phone.trim()) {
+      Alert.alert('Missing information', 'Please fill in your shop name, email, and phone number.');
+      return;
+    }
+    if (!pickupAddress) {
+      Alert.alert('Missing information', 'Please set a pickup address so buyers know where orders ship from.');
+      return;
+    }
+    router.push({
+      pathname: '/(seller-registration)/BusinessInfo',
+      params: { shopName, email, phone },
+    } as any);
+  }
 
   return (
     <LinearGradient
@@ -67,12 +96,28 @@ export default function ShopInfo() {
           {/* Pickup Address, Email, Phone */}
           <View style={[si.formCard, { marginTop: 12 }]}>
             {/* Pickup Address */}
-            <Pressable style={[si.fieldBorder, si.addressRow]}>
-              <Text style={si.fieldText}>
-                Pickup Address <Text style={{ color: '#EF4444' }}>*</Text>
-              </Text>
+            <Pressable
+              style={[si.fieldBorder, si.addressRow]}
+              onPress={() =>
+                router.push({
+                  pathname: '/(profile)/Addresses',
+                  params: { mode: 'pickup' },
+                } as any)
+              }>
+              <View style={{ flex: 1 }}>
+                <Text style={si.fieldText}>
+                  Pickup Address <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                {pickupAddress ? (
+                  <Text style={si.pickupSummary} numberOfLines={1}>
+                    {[pickupAddress.street, pickupAddress.city].filter(Boolean).join(', ')}
+                  </Text>
+                ) : null}
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#4289AB' }}>Set</Text>
+                <Text style={{ fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#4289AB' }}>
+                  {pickupAddress ? 'Change' : 'Set'}
+                </Text>
                 <ChevronRight size={16} color="#ccc" />
               </View>
             </Pressable>
@@ -121,7 +166,7 @@ export default function ShopInfo() {
           </Pressable>
           <Pressable
             style={si.nextBtn}
-            onPress={() => router.push('/(seller-registration)/BusinessInfo')}>
+            onPress={handleNext}>
             <Text style={si.nextText}>Next</Text>
           </Pressable>
         </View>
@@ -172,6 +217,7 @@ const si = StyleSheet.create({
   fieldLabel: { fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#9CA3AF' },
   charCount: { fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#D1D5DB' },
   fieldText: { fontFamily: 'Poppins_400Regular', fontSize: 14, color: '#1F2937' },
+  pickupSummary: { fontFamily: 'Poppins_400Regular', fontSize: 11, color: '#9CA3AF', marginTop: 3 },
   addressRow: {
     flexDirection: 'row',
     alignItems: 'center',

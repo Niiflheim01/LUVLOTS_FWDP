@@ -80,6 +80,12 @@ export type PaymentStatusResult = {
 
 export type VerifiedWebhookEvent = {
   providerEventId: string;
+  /** Our own payment_attempts.id, echoed back by Ganap as externalId. Since
+   * Ganap's webhook has no signature, the handler requires this AND
+   * providerTransactionId to both match the same payment_attempts row before
+   * acting -- an attacker would need to correctly guess two independent
+   * unguessable values instead of one. */
+  externalId: string;
   providerTransactionId: string;
   amount: number;
   status: PaymentStatusResult['status'];
@@ -161,6 +167,7 @@ class GanapAdapter implements G8PayAdapter {
 
     return {
       providerEventId: `${externalId}:${referenceNumber}:${status}`,
+      externalId,
       providerTransactionId: referenceNumber,
       amount,
       status: mappedStatus,

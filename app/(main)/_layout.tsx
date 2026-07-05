@@ -8,15 +8,14 @@ export default function MainLayout() {
       }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="BiddingScreen" />
+      <Stack.Screen name="AuctionDetailScreen" />
       <Stack.Screen name="ProductScreen" />
       <Stack.Screen name="MessagesScreen" />
       <Stack.Screen name="LuvlistScreen" />
-      <Stack.Screen name="CartDetailsScreen" />
-      <Stack.Screen name="CharityScreen" />
-      <Stack.Screen name="CheckoutScreen" />
       <Stack.Screen name="LiveSellingScreen" />
       <Stack.Screen name="CharityDetailScreen" />
-      <Stack.Screen name="TrackOrderScreen" />
+      <Stack.Screen name="VouchersScreen" />
+      <Stack.Screen name="BecomeAPartnerScreen" />
     </Stack>
   );
 }

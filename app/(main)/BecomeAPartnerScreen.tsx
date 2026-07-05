@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,6 +34,10 @@ import {
   X,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+
+import { submitPartnerApplication } from '@/lib/partners';
+import { logError } from '@/lib/observability';
+import { useAuth } from '@/lib/auth-context';
 
 const ORG_TYPES = ['Foundation', 'NGO', 'Religious Org', 'Government Agency', 'Other'];
 
@@ -232,6 +237,9 @@ export default function BecomeAPartnerScreen() {
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [bannerUri, setBannerUri] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const { user } = useAuth();
 
   async function pickImage(onSet: (uri: string) => void) {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -255,14 +263,42 @@ export default function BecomeAPartnerScreen() {
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const effectiveType = orgType === 'Other' ? otherSector.trim() : orgType;
     if (!orgName.trim() || !effectiveType || !regNumber.trim() || !mission.trim() ||
         !contactName.trim() || !contactEmail.trim() || !contactPhone.trim() || focusAreas.length === 0) {
       Alert.alert('Incomplete Form', 'Please fill in all required fields and select at least one focus area.');
       return;
     }
-    setSubmitted(true);
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in before submitting a partner application.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const application = await submitPartnerApplication({
+        orgName,
+        orgType: effectiveType,
+        registrationNumber: regNumber,
+        taxNumber: taxNumber,
+        mission,
+        focusAreas,
+        website,
+        contactName,
+        contactEmail,
+        contactPhone,
+        facebook,
+        instagram,
+      });
+      setReferenceNumber(`LV-CHARITY-${application.id.slice(0, 8).toUpperCase()}`);
+      setSubmitted(true);
+    } catch (error) {
+      logError(error, { area: 'BecomeAPartnerScreen.handleSubmit' });
+      Alert.alert('Could not submit', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -307,7 +343,7 @@ export default function BecomeAPartnerScreen() {
 
           <Animated.View entering={FadeInDown.delay(500).duration(400)} style={s.refCard}>
             <Text style={s.refLabel}>Reference Number</Text>
-            <Text style={s.refValue}>LV-CHARITY-{Date.now().toString().slice(-8)}</Text>
+            <Text style={s.refValue}>{referenceNumber}</Text>
             <Text style={s.refHint}>Keep this for your records. We'll also send a confirmation to your email.</Text>
           </Animated.View>
 
@@ -575,14 +611,21 @@ export default function BecomeAPartnerScreen() {
           <Animated.View entering={FadeInDown.delay(380).duration(400)}>
             <Pressable
               onPress={handleSubmit}
-              style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+              disabled={submitting}
+              style={({ pressed }) => [{ opacity: pressed || submitting ? 0.7 : 1 }]}>
               <LinearGradient
                 colors={['#1A5C7A', '#4289AB']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={s.submitBtn}>
-                <Heart size={18} color="#fff" fill="#fff" />
-                <Text style={s.submitBtnText}>Submit Application</Text>
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Heart size={18} color="#fff" fill="#fff" />
+                    <Text style={s.submitBtnText}>Submit Application</Text>
+                  </>
+                )}
               </LinearGradient>
             </Pressable>
           </Animated.View>

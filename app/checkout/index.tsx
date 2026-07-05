@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -9,15 +9,14 @@ import {
   Alert,
   TouchableOpacity,
   ImageSourcePropType,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
   MapPin,
-  Tag,
   ChevronRight,
-  X,
   Truck,
   Wallet,
   Check,
@@ -25,31 +24,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import GCashPaymentModal from '@/components/GCashPaymentModal';
+import { getMyAddresses } from '@/lib/addresses';
 import { useAuth } from '@/lib/auth-context';
+import { useCart } from '@/lib/cart-context';
 import { env } from '@/lib/env';
-
-const VOUCHERS: Record<string, { label: string; discount: number; type: 'percent' | 'fixed' | 'shipping' }> = {
-  'WELCOME50': { label: 'Welcome Gift — 50% off', discount: 50, type: 'percent' },
-  'FIRSTBUY':  { label: 'First Order — ₱200 off', discount: 200, type: 'fixed' },
-  'FREESHIP':  { label: 'Free Shipping',           discount: 150, type: 'shipping' },
-  'LUVLOTS10': { label: '10% Sitewide Discount',   discount: 10,  type: 'percent' },
-  'BIDWIN20':  { label: 'Auction Winner — 20% off', discount: 20, type: 'percent' },
-};
-
-const MOCK_ORDER = {
-  item: "It's Showtime Jacket",
-  seller: 'Vice Ganda Shop',
-  price: 12000,
-  shipping: 150,
-  qty: 1,
-  imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=200&q=80',
-  // G8 Pay charges are derived server-side from a real `listings` row (see
-  // supabase/functions/g8-pay-create-checkout), never from client input.
-  // This screen still runs on mock cart data, so there's no real listing
-  // behind it yet -- set this to a real listings.id (see README "Known
-  // limitations") to test the live GCash flow end-to-end.
-  listingId: '',
-};
+import { getListingsByIds, type LiveListing } from '@/lib/listings';
+import { createOrderFromListings } from '@/lib/orders';
+import { logError } from '@/lib/observability';
+import type { Address } from '@/types/marketplace';
 
 type PaymentId = 'cod' | 'gcash' | 'maya' | 'qrph';
 
@@ -83,83 +65,133 @@ const PAYMENT_OPTIONS = [
 export default function CheckoutIndex() {
   const router = useRouter();
   const { user } = useAuth();
+  const { listingIds: listingIdsParam } = useLocalSearchParams<{ listingIds?: string }>();
+  const { clearCart } = useCart();
+
+  const [items, setItems] = useState<LiveListing[]>([]);
+  const [defaultAddress, setDefaultAddress] = useState<Address | null>(null);
+  const [loading, setLoading] = useState(true);
   const [paymentGroup, setPaymentGroup] = useState<'ewallet' | 'cod' | null>(null);
   const [walletChoice, setWalletChoice] = useState<PaymentId | null>(null);
-  const [appliedVoucher, setAppliedVoucher] = useState<string | null>(null);
   const [showGCashModal, setShowGCashModal] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [creatingOrder, setCreatingOrder] = useState(false);
 
-  function handleApplyVoucher() {
-    const options = Object.keys(VOUCHERS).map((code) => ({
-      text: `${code} — ${VOUCHERS[code].label}`,
-      onPress: () => setAppliedVoucher(code),
-    }));
-    Alert.alert('Select Voucher', 'Choose a voucher to apply:', [
-      ...options,
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
-  }
+  const listingIds = (listingIdsParam ?? '').split(',').filter(Boolean);
 
-  function getDiscount() {
-    if (!appliedVoucher) return 0;
-    const v = VOUCHERS[appliedVoucher];
-    if (!v) return 0;
-    if (v.type === 'percent') return Math.round(MOCK_ORDER.price * v.discount / 100);
-    if (v.type === 'fixed') return v.discount;
-    if (v.type === 'shipping') return MOCK_ORDER.shipping;
-    return 0;
-  }
+  useEffect(() => {
+    if (listingIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+    getListingsByIds(listingIds)
+      .then(setItems)
+      .catch((error) => logError(error, { area: 'Checkout.loadItems' }))
+      .finally(() => setLoading(false));
+    getMyAddresses()
+      .then((addresses) => setDefaultAddress(addresses.find((a) => a.is_default) ?? addresses[0] ?? null))
+      .catch((error) => logError(error, { area: 'Checkout.loadAddress' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listingIdsParam]);
 
-  const discount = getDiscount();
-  const shippingFee =
-    appliedVoucher && VOUCHERS[appliedVoucher]?.type === 'shipping' ? 0 : MOCK_ORDER.shipping;
-  const subtotalDiscount = VOUCHERS[appliedVoucher ?? '']?.type !== 'shipping' ? discount : 0;
-  const total = MOCK_ORDER.price + shippingFee - subtotalDiscount;
+  const total = items.reduce((sum, item) => sum + item.price, 0);
+
+  const QRPH_WALLETS: PaymentId[] = ['gcash', 'maya', 'qrph'];
+  const QRPH_LABELS: Record<string, string> = { gcash: 'GCash', maya: 'Maya', qrph: 'QR Ph' };
 
   function getPaymentLabel() {
     if (paymentGroup === 'cod') return 'Cash on Delivery';
-    if (paymentGroup === 'ewallet' && walletChoice === 'gcash') return 'GCash';
-    if (paymentGroup === 'ewallet' && walletChoice === 'maya') return 'Maya';
-    if (paymentGroup === 'ewallet' && walletChoice === 'qrph') return 'QR Ph';
+    if (paymentGroup === 'ewallet' && walletChoice && QRPH_WALLETS.includes(walletChoice)) {
+      return QRPH_LABELS[walletChoice];
+    }
     return null;
   }
 
   function goToSuccessScreen(label: string) {
+    clearCart(listingIds);
     router.replace({
       pathname: '/checkout/success',
       params: {
-        item: MOCK_ORDER.item,
+        item: items.length === 1 ? items[0].title : `${items.length} items`,
         total: total.toLocaleString(),
         payment: label,
       },
     } as any);
   }
 
-  function handlePlaceOrder() {
+  async function handlePlaceOrder() {
+    if (items.length === 0) return;
+
     const label = getPaymentLabel();
     if (!label) {
       Alert.alert('Select Payment', 'Please choose a payment method to continue.');
       return;
     }
-
-    if (paymentGroup === 'ewallet' && walletChoice === 'gcash') {
-      if (!env.enableG8Pay) {
-        Alert.alert(
-          'G8 Pay not enabled',
-          'Set EXPO_PUBLIC_ENABLE_G8_PAY=true in .env once the G8 Pay Edge Functions are deployed.',
-        );
-        return;
-      }
-      if (!user) {
-        Alert.alert('Sign in required', 'Please sign in to pay with GCash.');
-        return;
-      }
-      setShowGCashModal(true);
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to check out.');
       return;
     }
 
-    // Cash on Delivery / Maya / QR Ph still use the mock flow -- only the
-    // GCash path above is wired to the real G8 Pay integration.
-    goToSuccessScreen(label);
+    const isQrPhWallet = paymentGroup === 'ewallet' && walletChoice !== null && QRPH_WALLETS.includes(walletChoice);
+
+    if (isQrPhWallet && !env.enableG8Pay) {
+      Alert.alert(
+        'G8 Pay not enabled',
+        'Set EXPO_PUBLIC_ENABLE_G8_PAY=true in .env once the G8 Pay Edge Functions are deployed.',
+      );
+      return;
+    }
+
+    if (isQrPhWallet && total !== 0 && (total < 200 || total > 50000)) {
+      Alert.alert(
+        'Order total not supported',
+        'G8 Pay can only process QR Ph payments between ₱200 and ₱50,000. Please choose Cash on Delivery for this order total.',
+      );
+      return;
+    }
+
+    setCreatingOrder(true);
+    try {
+      const { order } = await createOrderFromListings(items.map((item) => item.id));
+
+      if (isQrPhWallet) {
+        setPendingOrderId(order.id);
+        setShowGCashModal(true);
+        return;
+      }
+
+      // Cash on Delivery: the order itself is real; fulfillment/payment
+      // collection happens offline between buyer and seller.
+      goToSuccessScreen(label);
+    } catch (error) {
+      logError(error, { area: 'Checkout.handlePlaceOrder' });
+      Alert.alert('Could not place order', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setCreatingOrder(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F0F3F7', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#4289AB" size="large" />
+      </View>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F0F3F7', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 16, color: '#1A2C3D', textAlign: 'center' }}>
+          No items to check out
+        </Text>
+        <Pressable onPress={() => router.replace('/(tabs)/(cart)')} style={[s.placeBtn, { marginTop: 20 }]}>
+          <LinearGradient colors={['#4289AB', '#2C6F91']} style={s.placeGrad}>
+            <Text style={s.placeText}>Back to Cart</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -188,10 +220,22 @@ export default function CheckoutIndex() {
             <MapPin size={14} color="#4289AB" />
             <Text style={s.sectionTitle}>Delivery Address</Text>
           </View>
-          <Text style={s.addressName}>Ian Vergara  <Text style={s.addressPhone}>+63 912 345 6789</Text></Text>
-          <Text style={s.addressLine}>123 Roxas Boulevard, Malate, Manila, 1004 Metro Manila</Text>
+          {defaultAddress ? (
+            <>
+              <Text style={s.addressLine}>
+                {defaultAddress.full_name} · {defaultAddress.phone}
+              </Text>
+              <Text style={s.addressLine}>
+                {[defaultAddress.street, defaultAddress.city, defaultAddress.region, defaultAddress.postal_code]
+                  .filter(Boolean)
+                  .join(', ')}
+              </Text>
+            </>
+          ) : (
+            <Text style={s.addressLine}>No delivery address saved yet.</Text>
+          )}
           <View style={s.changeRow}>
-            <Text style={s.changeLink}>Change</Text>
+            <Text style={s.changeLink}>{defaultAddress ? 'Change address' : 'Add address'}</Text>
             <ChevronRight size={13} color="#4289AB" />
           </View>
         </Pressable>
@@ -200,61 +244,25 @@ export default function CheckoutIndex() {
 
         {/* Items section */}
         <View style={s.section}>
-          <Text style={s.sellerRow}>
-            <Text style={s.sellerIcon}>🏪 </Text>
-            <Text style={s.sellerName}>{MOCK_ORDER.seller}</Text>
-          </Text>
-          <View style={s.itemRow}>
-            <Image
-              source={{ uri: MOCK_ORDER.imageUri }}
-              style={s.itemImage}
-              resizeMode="cover"
-            />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={s.itemName} numberOfLines={2}>{MOCK_ORDER.item}</Text>
-              <Text style={s.itemVariant}>Size: M  ·  Color: Black</Text>
-              <View style={s.itemBottomRow}>
-                <Text style={s.itemPrice}>₱{MOCK_ORDER.price.toLocaleString()}.00</Text>
-                <Text style={s.itemQty}>x{MOCK_ORDER.qty}</Text>
+          {items.map((item) => (
+            <View key={item.id} style={s.itemRow}>
+              <Image
+                source={{ uri: item.cover_image_url ?? undefined }}
+                style={s.itemImage}
+                resizeMode="cover"
+              />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={s.itemName} numberOfLines={2}>{item.title}</Text>
+                <Text style={s.itemVariant} numberOfLines={1}>
+                  {item.seller?.full_name ?? item.seller?.username ?? 'LUVLOTS Seller'}
+                </Text>
+                <View style={s.itemBottomRow}>
+                  <Text style={s.itemPrice}>{item.currency} {item.price.toLocaleString()}</Text>
+                </View>
               </View>
             </View>
-          </View>
-
-          {/* Shipping method */}
-          <View style={s.shippingRow}>
-            <Truck size={13} color="#9CA3AF" />
-            <Text style={s.shippingLabel}>Standard Delivery</Text>
-            <Text style={s.shippingFee}>
-              {shippingFee === 0 ? 'FREE' : `₱${MOCK_ORDER.shipping}.00`}
-            </Text>
-          </View>
+          ))}
         </View>
-
-        <View style={s.sep} />
-
-        {/* Voucher */}
-        <Pressable
-          style={s.section}
-          onPress={appliedVoucher ? () => setAppliedVoucher(null) : handleApplyVoucher}>
-          <View style={s.voucherRow}>
-            <Tag size={15} color={appliedVoucher ? '#10B981' : '#D9AC4E'} />
-            {appliedVoucher ? (
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={s.voucherApplied}>Voucher Applied</Text>
-                <Text style={s.voucherCode}>{VOUCHERS[appliedVoucher]?.label}</Text>
-              </View>
-            ) : (
-              <Text style={[s.voucherPlaceholder, { marginLeft: 10 }]}>
-                LuvLots Voucher / Promo Code
-              </Text>
-            )}
-            {appliedVoucher ? (
-              <X size={16} color="#9CA3AF" />
-            ) : (
-              <ChevronRight size={15} color="#CCC" />
-            )}
-          </View>
-        </Pressable>
 
         <View style={s.sep} />
 
@@ -286,7 +294,6 @@ export default function CheckoutIndex() {
                   </View>
                 </TouchableOpacity>
 
-                {/* E-wallet sub-options */}
                 {selected && opt.children && (
                   <View style={s.walletOptions}>
                     {opt.children.map((child) => {
@@ -326,25 +333,13 @@ export default function CheckoutIndex() {
         <View style={s.section}>
           <Text style={s.pmTitle}>Order Summary</Text>
           <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Subtotal ({MOCK_ORDER.qty} item)</Text>
-            <Text style={s.summaryValue}>₱{MOCK_ORDER.price.toLocaleString()}.00</Text>
+            <Text style={s.summaryLabel}>Subtotal ({items.length} item{items.length === 1 ? '' : 's'})</Text>
+            <Text style={s.summaryValue}>{items[0]?.currency ?? 'PHP'} {total.toLocaleString()}</Text>
           </View>
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Shipping Fee</Text>
-            <Text style={[s.summaryValue, shippingFee === 0 && { color: '#10B981' }]}>
-              {shippingFee === 0 ? 'FREE' : `₱${MOCK_ORDER.shipping.toLocaleString()}.00`}
-            </Text>
-          </View>
-          {subtotalDiscount > 0 && (
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, { color: '#10B981' }]}>Voucher Discount</Text>
-              <Text style={[s.summaryValue, { color: '#10B981' }]}>−₱{subtotalDiscount.toLocaleString()}.00</Text>
-            </View>
-          )}
           <View style={s.totalDivider} />
           <View style={s.summaryRow}>
             <Text style={s.totalLabel}>Total Payment</Text>
-            <Text style={s.totalValue}>₱{total.toLocaleString()}.00</Text>
+            <Text style={s.totalValue}>{items[0]?.currency ?? 'PHP'} {total.toLocaleString()}</Text>
           </View>
         </View>
       </ScrollView>
@@ -355,17 +350,22 @@ export default function CheckoutIndex() {
           <View style={s.bottomInner}>
             <View style={{ flex: 1 }}>
               <Text style={s.bottomLabel}>Total Payment</Text>
-              <Text style={s.bottomTotal}>₱{total.toLocaleString()}.00</Text>
+              <Text style={s.bottomTotal}>{items[0]?.currency ?? 'PHP'} {total.toLocaleString()}</Text>
             </View>
             <Pressable
               onPress={handlePlaceOrder}
-              style={({ pressed }) => [s.placeBtn, pressed && { opacity: 0.88 }]}>
+              disabled={creatingOrder}
+              style={({ pressed }) => [s.placeBtn, (pressed || creatingOrder) && { opacity: 0.88 }]}>
               <LinearGradient
                 colors={['#4289AB', '#2C6F91']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={s.placeGrad}>
-                <Text style={s.placeText}>Place Order</Text>
+                {creatingOrder ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={s.placeText}>Place Order</Text>
+                )}
               </LinearGradient>
             </Pressable>
           </View>
@@ -374,12 +374,13 @@ export default function CheckoutIndex() {
 
       <GCashPaymentModal
         visible={showGCashModal}
-        listingId={MOCK_ORDER.listingId}
+        orderId={pendingOrderId ?? ''}
         amount={total}
+        providerLabel={walletChoice ? QRPH_LABELS[walletChoice] : 'GCash'}
         onClose={() => setShowGCashModal(false)}
         onPaid={() => {
           setShowGCashModal(false);
-          goToSuccessScreen('GCash');
+          goToSuccessScreen(walletChoice ? QRPH_LABELS[walletChoice] : 'GCash');
         }}
       />
     </View>
@@ -429,17 +430,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: '#4289AB',
   },
-  addressName: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    color: '#1A2C3D',
-    marginBottom: 3,
-  },
-  addressPhone: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    color: '#6B7280',
-  },
   addressLine: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 13,
@@ -456,17 +446,6 @@ const s = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 12,
     color: '#4289AB',
-  },
-  sellerRow: {
-    marginBottom: 10,
-  },
-  sellerIcon: {
-    fontSize: 13,
-  },
-  sellerName: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 13,
-    color: '#1A2C3D',
   },
   itemRow: {
     flexDirection: 'row',
@@ -500,52 +479,7 @@ const s = StyleSheet.create({
   itemPrice: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 15,
-    color: '#EF4444',
-  },
-  itemQty: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  shippingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F3F7',
-  },
-  shippingLabel: {
-    flex: 1,
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  shippingFee: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 12,
-    color: '#10B981',
-  },
-  voucherRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  voucherApplied: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 13,
-    color: '#10B981',
-  },
-  voucherCode: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    color: '#10B981',
-    marginTop: 1,
-  },
-  voucherPlaceholder: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    color: '#6B7280',
-    flex: 1,
+    color: '#1A2C3D',
   },
   pmTitle: {
     fontFamily: 'Poppins_700Bold',
@@ -689,7 +623,7 @@ const s = StyleSheet.create({
   totalValue: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 15,
-    color: '#EF4444',
+    color: '#1A2C3D',
   },
   bottomBar: {
     position: 'absolute',
@@ -721,7 +655,7 @@ const s = StyleSheet.create({
   bottomTotal: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 18,
-    color: '#EF4444',
+    color: '#1A2C3D',
   },
   placeBtn: {
     flex: 1,

@@ -10,24 +10,32 @@ import { env } from '@/lib/env';
 const supabaseUrl = env.supabaseUrl || 'https://unconfigured.supabase.co';
 const supabaseAnonKey = env.supabaseAnonKey || 'unconfigured-anon-key';
 
+// Platform.OS reports 'web' both in a real browser AND in the Node process
+// that expo-router's static web export uses to pre-render routes (no
+// `window` there) -- guard against that or SSR crashes trying to reach
+// into window.localStorage via AsyncStorage.
+const isBrowser = typeof window !== 'undefined';
+
 const secureStorage = {
   async getItem(key: string) {
     if (Platform.OS === 'web') {
-      return AsyncStorage.getItem(key);
+      return isBrowser ? AsyncStorage.getItem(key) : null;
     }
 
     return SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string) {
     if (Platform.OS === 'web') {
-      return AsyncStorage.setItem(key, value);
+      if (isBrowser) await AsyncStorage.setItem(key, value);
+      return;
     }
 
     return SecureStore.setItemAsync(key, value);
   },
   async removeItem(key: string) {
     if (Platform.OS === 'web') {
-      return AsyncStorage.removeItem(key);
+      if (isBrowser) await AsyncStorage.removeItem(key);
+      return;
     }
 
     return SecureStore.deleteItemAsync(key);

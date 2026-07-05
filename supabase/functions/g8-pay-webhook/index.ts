@@ -69,9 +69,16 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Failed to log webhook event.' }, 500);
   }
 
+  // Ganap's webhook has no signature (see g8pay-adapter.ts), so a single
+  // guessable identifier (e.g. if referenceNumber turns out to be
+  // sequential/short) would be enough to forge a "paid" event. Requiring
+  // BOTH id (our own server-generated UUID, echoed back as externalId) AND
+  // provider_transaction_id to match the same row means an attacker has to
+  // correctly guess two independent unguessable values, not just one.
   const { data: attempt } = await admin
     .from('payment_attempts')
     .select('*')
+    .eq('id', event.externalId)
     .eq('provider_transaction_id', event.providerTransactionId)
     .maybeSingle();
 
@@ -104,8 +111,16 @@ Deno.serve(async (req) => {
   if (event.status === 'paid' && !alreadyPaid) {
     if (attempt.order_id) {
       await admin.from('orders').update({ status: 'paid' }).eq('id', attempt.order_id);
-    }
-    if (attempt.listing_id) {
+
+      const { data: orderItems } = await admin
+        .from('order_items')
+        .select('listing_id')
+        .eq('order_id', attempt.order_id);
+
+      for (const item of orderItems ?? []) {
+        await admin.from('listings').update({ status: 'sold' }).eq('id', item.listing_id).eq('status', 'live');
+      }
+    } else if (attempt.listing_id) {
       await admin
         .from('listings')
         .update({ status: 'sold' })

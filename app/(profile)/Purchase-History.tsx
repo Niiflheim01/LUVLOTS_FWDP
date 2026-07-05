@@ -1,82 +1,49 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, ScrollView, Text, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
 import { ShoppingBag } from 'lucide-react-native';
-import ProductCard from '@/components/ProductCard';
 
-type Filter = 'All' | 'To Ship' | 'Received';
+import { getMyOrders } from '@/lib/orders';
+import { logError } from '@/lib/observability';
 
-const PURCHASE_HISTORY = [
-  {
-    date: 'July 9, 2025',
-    items: [
-      {
-        name: 'Signature Sneakers',
-        price: '120.00',
-        status: 'toShip' as const,
-        imageUri: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&q=80',
-        sellerId: '3',
-        description: 'Limited collab sneakers hand-signed.',
-        category: 'Footwear',
-      },
-    ],
-  },
-  {
-    date: 'July 8, 2025',
-    items: [
-      {
-        name: 'Vintage Sunglasses',
-        price: '45.00',
-        status: 'received' as const,
-        imageUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=200&q=80',
-        sellerId: '7',
-        description: 'Vintage-style sunglasses from celebrity wardrobe.',
-        category: 'Accessories',
-      },
-      {
-        name: 'Designer Perfume',
-        price: '95.00',
-        status: 'received' as const,
-        imageUri: 'https://images.unsplash.com/photo-1541643600914-78b084683702?w=200&q=80',
-        sellerId: '6',
-        description: 'Limited edition designer fragrance.',
-        category: 'Beauty',
-      },
-    ],
-  },
-  {
-    date: 'June 30, 2025',
-    items: [
-      {
-        name: 'Travel Backpack',
-        price: '175.00',
-        status: 'received' as const,
-        imageUri: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=200&q=80',
-        sellerId: '6',
-        description: 'Premium travel backpack, lightly used.',
-        category: 'Bags',
-      },
-    ],
-  },
-];
+type Filter = 'All' | 'Pending' | 'Paid' | 'Fulfilled';
 
-const FILTERS: Filter[] = ['All', 'To Ship', 'Received'];
+const FILTERS: Filter[] = ['All', 'Pending', 'Paid', 'Fulfilled'];
+
+type MyOrder = Awaited<ReturnType<typeof getMyOrders>>[number];
+
+function matchesFilter(status: string, filter: Filter) {
+  if (filter === 'All') return true;
+  if (filter === 'Pending') return status === 'pending' || status === 'awaiting_payment';
+  if (filter === 'Paid') return status === 'paid';
+  if (filter === 'Fulfilled') return status === 'fulfilled';
+  return true;
+}
 
 export default function PurchaseHistory() {
   const [filter, setFilter] = useState<Filter>('All');
+  const [orders, setOrders] = useState<MyOrder[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = PURCHASE_HISTORY.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => {
-      if (filter === 'All') return true;
-      if (filter === 'To Ship') return item.status === 'toShip';
-      if (filter === 'Received') return item.status === 'received';
-      return true;
-    }),
-  })).filter((group) => group.items.length > 0);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getMyOrders();
+      setOrders(data);
+    } catch (error) {
+      logError(error, { area: 'PurchaseHistory.load' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered = orders.filter((order) => matchesFilter(order.status, filter));
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F5F8FA' }}>
-      {/* Filter Tabs */}
       <View style={ph.filterBar}>
         {FILTERS.map((f) => (
           <Pressable
@@ -90,38 +57,39 @@ export default function PurchaseHistory() {
         ))}
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}
-        showsVerticalScrollIndicator={false}>
-        {filtered.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingTop: 60 }}>
-            <ShoppingBag size={56} color="#CCC" />
-            <Text style={ph.emptyText}>No purchases in this category</Text>
-          </View>
-        ) : (
-          filtered.map((group, i) => (
-            <View key={i} style={ph.card}>
-              <View style={ph.headerRow}>
-                <Text style={ph.dateText}>{group.date}</Text>
-                <Text style={ph.countText}>{group.items.length} item{group.items.length > 1 ? 's' : ''}</Text>
-              </View>
-              {group.items.map((item, j) => (
-                <ProductCard
-                  key={j}
-                  name={item.name}
-                  price={item.price}
-                  status={item.status}
-                  imageUri={item.imageUri}
-                  sellerId={item.sellerId}
-                  description={item.description}
-                  category={item.category}
-                />
-              ))}
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color="#4289AB" />
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}
+          showsVerticalScrollIndicator={false}>
+          {filtered.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingTop: 60 }}>
+              <ShoppingBag size={56} color="#CCC" />
+              <Text style={ph.emptyText}>No purchases in this category</Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+          ) : (
+            filtered.map((order) => (
+              <View key={order.id} style={ph.card}>
+                <View style={ph.headerRow}>
+                  <Text style={ph.dateText}>{new Date(order.created_at).toLocaleDateString()}</Text>
+                  <Text style={ph.countText}>{(order.order_items ?? []).length} item(s) · {order.status}</Text>
+                </View>
+                {(order.order_items ?? []).map((item: any) => (
+                  <View key={item.id} style={ph.itemRow}>
+                    <Image source={{ uri: item.listings?.cover_image_url ?? undefined }} style={ph.itemImage} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={ph.itemName} numberOfLines={1}>{item.listings?.title ?? 'Item'}</Text>
+                      <Text style={ph.itemPrice}>{item.currency} {(Number(item.unit_price) * item.quantity).toLocaleString()}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -176,4 +144,8 @@ const ph = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dateText: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: '#1F2937' },
   countText: { fontFamily: 'Poppins_400Regular', fontSize: 12, color: '#9CA3AF' },
+  itemRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  itemImage: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#F5F5F5' },
+  itemName: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: '#222' },
+  itemPrice: { fontFamily: 'Poppins_700Bold', fontSize: 13, color: '#1A2C3D', marginTop: 4 },
 });

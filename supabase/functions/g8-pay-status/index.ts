@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     }
 
     if (TERMINAL_STATUSES.has(attempt.status) || !attempt.provider_transaction_id) {
-      return jsonResponse(attempt);
+      return jsonResponse(toClientAttempt(attempt));
     }
 
     try {
@@ -53,17 +53,26 @@ Deno.serve(async (req) => {
         .select('*')
         .single();
 
-      return jsonResponse(updated ?? attempt);
+      return jsonResponse(toClientAttempt(updated ?? attempt));
     } catch {
       // Adapter not configured yet -- return the last known DB state
       // instead of failing the whole request.
-      return jsonResponse(attempt);
+      return jsonResponse(toClientAttempt(attempt));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error.';
     return jsonResponse({ error: message }, 500);
   }
 });
+
+// provider_transaction_id (Ganap's referenceNumber) and provider_response
+// (Ganap's raw payload) are never sent to the client -- see the comment in
+// g8-pay-create-checkout/index.ts for why leaking the reference number
+// specifically would let a buyer forge their own "paid" webhook.
+function toClientAttempt(attempt: Record<string, unknown>) {
+  const { provider_transaction_id: _providerTransactionId, provider_response: _providerResponse, ...rest } = attempt;
+  return rest;
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

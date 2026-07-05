@@ -13,21 +13,26 @@ const POLL_INTERVAL_MS = 4000;
 
 type Props = {
   visible: boolean;
-  listingId: string;
+  orderId: string;
   amount: number;
   currency?: string;
+  /** Which QR Ph wallet the buyer picked (GCash / Maya / QR Ph) -- purely
+   * cosmetic, since G8 Pay/Ganap always returns the same universal QR Ph
+   * EMV payload regardless of which app scans it. */
+  providerLabel?: string;
   onClose: () => void;
   onPaid: () => void;
 };
 
 type Phase = 'idle' | 'creating' | 'awaiting_scan' | 'checking' | 'paid' | 'error';
 
-export default function GCashPaymentModal({ visible, listingId, amount, currency = 'PHP', onClose, onPaid }: Props) {
+export default function GCashPaymentModal({ visible, orderId, amount, currency = 'PHP', providerLabel = 'GCash', onClose, onPaid }: Props) {
   const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>('idle');
   const [qrPayload, setQrPayload] = useState<string | null>(null);
   const [paymentAttemptId, setPaymentAttemptId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notYetPaidNotice, setNotYetPaidNotice] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -37,6 +42,7 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
       setQrPayload(null);
       setPaymentAttemptId(null);
       setErrorMessage(null);
+      setNotYetPaidNotice(false);
       return;
     }
 
@@ -46,11 +52,9 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
       return;
     }
 
-    if (!listingId) {
+    if (!orderId) {
       setPhase('error');
-      setErrorMessage(
-        'No real listing is linked to this checkout yet, so there is nothing for G8 Pay to charge against.',
-      );
+      setErrorMessage('No order was created for this checkout, so there is nothing for G8 Pay to charge against.');
       return;
     }
 
@@ -71,9 +75,7 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
     setErrorMessage(null);
     try {
       const checkout = await createG8PayCheckout({
-        listingId,
-        amount,
-        currency,
+        orderId,
         returnUrl: `${env.appUrl}checkout/success`,
         cancelUrl: `${env.appUrl}checkout`,
       });
@@ -98,30 +100,42 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
       const attempt = await getG8PayStatus(attemptId);
       if (attempt.status === 'paid') {
         stopPolling();
+        setNotYetPaidNotice(false);
         setPhase('paid');
         onPaid();
-      } else if (['failed', 'cancelled', 'expired'].includes(attempt.status)) {
+        return true;
+      }
+      if (['failed', 'cancelled', 'expired'].includes(attempt.status)) {
         stopPolling();
         setPhase('error');
         setErrorMessage(`Payment ${attempt.status}. Please try again.`);
+        return true;
       }
+      return false;
     } catch (error) {
       logError(error, { area: 'GCashPaymentModal.checkStatus' });
+      return false;
     }
   }
 
   async function handleManualCheck() {
     if (!paymentAttemptId) return;
     setPhase('checking');
-    await checkStatus(paymentAttemptId);
-    setPhase((current) => (current === 'checking' ? 'awaiting_scan' : current));
+    setNotYetPaidNotice(false);
+    const resolved = await checkStatus(paymentAttemptId);
+    if (!resolved) {
+      // Still pending -- tell the buyer explicitly instead of silently
+      // dropping them back on the same QR code with no feedback.
+      setNotYetPaidNotice(true);
+      setPhase('awaiting_scan');
+    }
   }
 
   return (
     <Modal isVisible={visible} onBackdropPress={onClose} style={styles.modal}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.title}>Pay with GCash</Text>
+          <Text style={styles.title}>Pay with {providerLabel}</Text>
           <Pressable onPress={onClose} hitSlop={10}>
             <X size={22} color="#666" />
           </Pressable>
@@ -141,8 +155,14 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
             </View>
             <Text style={styles.amountText}>{currency} {amount.toLocaleString()}</Text>
             <Text style={styles.helperText}>
-              Open GCash (or any QR Ph-compatible app), scan this code, and complete the payment.
+              Open {providerLabel} (or any QR Ph-compatible app), scan this code, and complete the payment.
             </Text>
+            {notYetPaidNotice ? (
+              <Text style={styles.pendingNoticeText}>
+                We haven't received your payment yet. It's checked automatically every few seconds — if you've
+                already paid, this can take a moment to confirm.
+              </Text>
+            ) : null}
             <Pressable onPress={handleManualCheck} style={styles.checkBtn}>
               <Text style={styles.checkBtnText}>I've paid — check now</Text>
             </Pressable>
@@ -165,7 +185,7 @@ export default function GCashPaymentModal({ visible, listingId, amount, currency
         {phase === 'error' && (
           <View style={styles.center}>
             <Text style={styles.errorText}>{errorMessage}</Text>
-            {listingId && user ? (
+            {orderId && user ? (
               <Pressable onPress={startCheckout} style={styles.checkBtn}>
                 <Text style={styles.checkBtnText}>Retry</Text>
               </Pressable>
@@ -229,6 +249,16 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     textAlign: 'center',
     paddingHorizontal: 12,
+  },
+  pendingNoticeText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#B45309',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFBEB',
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   checkBtn: {
     marginTop: 8,

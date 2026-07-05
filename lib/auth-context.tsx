@@ -1,8 +1,9 @@
+import Constants, { AppOwnership } from 'expo-constants';
 import { makeRedirectUri } from 'expo-auth-session';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 
 import { assertPublicSupabaseEnv, env } from '@/lib/env';
 import { logError } from '@/lib/observability';
@@ -16,7 +17,7 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
-  signUpWithPassword: (input: { email: string; password: string; username: string }) => Promise<void>;
+  signUpWithPassword: (input: { email: string; password: string; username: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   signInWithOAuth: (provider: 'google' | 'facebook') => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -26,10 +27,21 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getRedirectUrl() {
-  return makeRedirectUri({
-    scheme: 'luvlots',
-    path: 'auth/callback',
-  });
+  // In Expo Go the custom "luvlots://" native scheme isn't registered, so an
+  // OAuth redirect to it never comes back to the app -- the WebBrowser
+  // session just hangs on a stuck spinner until the timeout. There,
+  // makeRedirectUri (with no scheme) returns the exp://<host> dev URL, which
+  // Expo Go CAN catch. In a dev-client / standalone build the real
+  // luvlots:// scheme works and is used instead.
+  //
+  // NOTE: whichever URL this returns must be in the Supabase Dashboard ->
+  // Authentication -> URL Configuration -> Redirect URLs allow-list. For
+  // Expo Go add `exp://**` (the host/port changes per machine); for release
+  // builds add `luvlots://auth/callback`.
+  if (Constants.appOwnership === AppOwnership.Expo) {
+    return makeRedirectUri({ path: 'auth/callback' });
+  }
+  return makeRedirectUri({ scheme: 'luvlots', path: 'auth/callback' });
 }
 
 async function upsertProfile(user: User) {
@@ -85,7 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, username, avatar_url, role, bio, created_at, updated_at')
+      .select(
+        'id, full_name, username, avatar_url, role, bio, created_at, updated_at, ' +
+          'verification_status, verification_type, verification_note, verification_document_url, verification_requested_at',
+      )
       .eq('id', activeSession.user.id)
       .maybeSingle();
 
@@ -136,7 +151,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      const raw = error.message.toLowerCase();
+      // "Invalid login credentials" is Supabase's catch-all -- it's also
+      // what you get if this email only has a Google identity (no password
+      // was ever set). Point the user at the right button instead.
+      if (raw.includes('invalid login credentials')) {
+        throw new Error(
+          "Wrong email or password. If you signed up with Google, use the “Continue with Google” button instead — that account has no password.",
+        );
+      }
+      if (raw.includes('email not confirmed')) {
+        throw new Error('Please confirm your email first. Check your inbox for the confirmation link, then try again.');
+      }
+      throw error;
+    }
     if (data.user) await upsertProfile(data.user);
     router.replace('/(tabs)/(store)');
   }, []);
@@ -154,18 +183,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    if (error) throw error;
-    if (data.user) await upsertProfile(data.user);
-    router.replace('/(tabs)/(store)');
+    if (error) {
+      const raw = error.message.toLowerCase();
+      if (raw.includes('rate limit') || raw.includes('too many')) {
+        throw new Error(
+          "Too many sign-up attempts in a short time (Supabase's built-in email service is limited to a few per hour). Wait a few minutes, or disable email confirmation in Supabase for testing.",
+        );
+      }
+      if (raw.includes('invalid') && raw.includes('email')) {
+        throw new Error(
+          'That email address was rejected. Use a real, correctly-formatted address — test/example domains (e.g. test@test.com) are often blocked.',
+        );
+      }
+      if (raw.includes('already registered') || raw.includes('already been registered') || raw.includes('user already')) {
+        throw new Error('An account with this email already exists. Try logging in instead.');
+      }
+      throw error;
+    }
+
+    // When "Confirm email" is ON in Supabase, signUp returns a user but NO
+    // session -- the account can't be used until the emailed link is clicked.
+    // Only navigate into the app when we actually have a session; otherwise
+    // tell the caller to show a "check your email" message (navigating in
+    // would drop the user into a logged-in-looking UI with no real session).
+    if (data.session && data.user) {
+      await upsertProfile(data.user);
+      router.replace('/(tabs)/(store)');
+      return { needsEmailConfirmation: false };
+    }
+    return { needsEmailConfirmation: true };
   }, []);
 
   const signInWithOAuth = useCallback(async (provider: 'google' | 'facebook') => {
     assertPublicSupabaseEnv();
     const redirectTo = getRedirectUrl();
-    // TEMPORARY DEBUG -- remove once the Supabase Redirect URLs allow-list is confirmed working.
-    if (__DEV__) {
-      Alert.alert('DEBUG redirectTo', redirectTo);
-    }
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: provider as Provider,
       options: {
@@ -177,20 +228,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
     if (!data.url) throw new Error('OAuth provider did not return an authorization URL.');
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-    if (result.type === 'cancel') {
-      throw new Error('Sign-in was cancelled.');
-    }
-    if (result.type !== 'success') {
-      throw new Error('Sign-in did not complete.');
-    }
+    // When Google has already authorized this app for the account (e.g.
+    // signing up again with an account that already has a LUVLOTS user),
+    // it can auto-redirect almost instantly. On Android that redirect is
+    // sometimes delivered straight to the app via the OS deep-link handler,
+    // bypassing the Custom Tab's own callback -- which leaves
+    // openAuthSessionAsync's promise unresolved forever (a stuck loading
+    // spinner). Race it against a direct Linking listener, plus a hard
+    // timeout so this can never hang indefinitely either way.
+    const resultUrl = await new Promise<string>((resolve, reject) => {
+      let settled = false;
 
-    // TEMPORARY DEBUG -- remove once the OAuth callback is confirmed working.
-    if (__DEV__) {
-      Alert.alert('DEBUG result.url', result.url);
-    }
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        subscription.remove();
+        clearTimeout(timeoutId);
+        fn();
+      };
 
-    const callbackUrl = new URL(result.url);
+      const subscription = Linking.addEventListener('url', (event) => {
+        if (event.url.startsWith(redirectTo)) {
+          finish(() => {
+            WebBrowser.dismissBrowser();
+            resolve(event.url);
+          });
+        }
+      });
+
+      const timeoutId = setTimeout(() => {
+        finish(() => reject(new Error('Sign-in timed out. Please try again.')));
+      }, 45000);
+
+      WebBrowser.openAuthSessionAsync(data.url as string, redirectTo)
+        .then((result) => {
+          if (result.type === 'success' && result.url) {
+            finish(() => resolve(result.url));
+          } else if (result.type === 'cancel' || result.type === 'dismiss') {
+            finish(() => reject(new Error('Sign-in was cancelled.')));
+          } else {
+            finish(() => reject(new Error('Sign-in did not complete.')));
+          }
+        })
+        .catch((err) => finish(() => reject(err)));
+    });
+
+    const callbackUrl = new URL(resultUrl);
     const code = callbackUrl.searchParams.get('code');
     if (!code) {
       throw new Error('OAuth callback did not include an authorization code.');

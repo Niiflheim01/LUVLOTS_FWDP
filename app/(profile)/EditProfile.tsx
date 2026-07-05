@@ -1,18 +1,52 @@
 import { router } from 'expo-router';
 import { Camera, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function EditProfile() {
-  const [shopName, setShopName] = useState('Apl.de.ap');
-  const [description, setDescription] = useState('');
-  const [updateFollowers, setUpdateFollowers] = useState(true);
+import { useAuth } from '@/lib/auth-context';
+import { logError } from '@/lib/observability';
+import { pickAvatarImage, updateMyProfile, uploadAvatar } from '@/lib/profile';
 
-  function handleSave() {
-    Alert.alert('Saved', 'Profile updated successfully.', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+export default function EditProfile() {
+  const { user, profile, refreshProfile } = useAuth();
+  const [fullName, setFullName] = useState(profile?.full_name ?? '');
+  const [bio, setBio] = useState(profile?.bio ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleChangeAvatar() {
+    setUploadingAvatar(true);
+    try {
+      const picked = await pickAvatarImage();
+      if (!picked) return;
+      const url = await uploadAvatar(picked.uri);
+      setAvatarUrl(url);
+      await updateMyProfile({ avatarUrl: url });
+      await refreshProfile();
+    } catch (error) {
+      logError(error, { area: 'EditProfile.handleChangeAvatar' });
+      Alert.alert('Could not update photo', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateMyProfile({ fullName, bio });
+      await refreshProfile();
+      Alert.alert('Saved', 'Profile updated successfully.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      logError(error, { area: 'EditProfile.handleSave' });
+      Alert.alert('Could not save', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -23,8 +57,8 @@ export default function EditProfile() {
             <ChevronLeft size={22} color="#fff" />
           </Pressable>
           <Text style={ep.headerTitle}>Edit Profile</Text>
-          <Pressable onPress={handleSave} style={ep.saveHeaderBtn}>
-            <Text style={ep.saveHeaderText}>Save</Text>
+          <Pressable onPress={handleSave} disabled={saving} style={ep.saveHeaderBtn}>
+            {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={ep.saveHeaderText}>Save</Text>}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -35,15 +69,18 @@ export default function EditProfile() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         {/* Profile Photo */}
-        <Pressable style={ep.photoRow}>
+        <Pressable style={ep.photoRow} onPress={handleChangeAvatar} disabled={uploadingAvatar}>
           <Text style={ep.labelText}>Profile Photo</Text>
           <View style={{ position: 'relative' }}>
-            <Image
-              source={require('@/assets/images/seller.png')}
-              style={{ width: 56, height: 56, borderRadius: 28 }}
-            />
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={{ width: 56, height: 56, borderRadius: 28 }} />
+            ) : (
+              <View style={ep.avatarPlaceholder}>
+                <Text style={ep.avatarInitial}>{(fullName || user?.email || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
             <View style={ep.cameraBadge}>
-              <Camera size={10} color="white" />
+              {uploadingAvatar ? <ActivityIndicator size="small" color="#fff" /> : <Camera size={10} color="white" />}
             </View>
           </View>
           <ChevronRight size={16} color="#ccc" />
@@ -53,8 +90,10 @@ export default function EditProfile() {
         <View style={ep.fieldCard}>
           <Text style={ep.fieldLabel}>Name</Text>
           <TextInput
-            value={shopName}
-            onChangeText={setShopName}
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="Your full name"
+            placeholderTextColor="#ccc"
             style={ep.input}
           />
         </View>
@@ -63,11 +102,11 @@ export default function EditProfile() {
         <View style={ep.fieldCard}>
           <View style={ep.fieldHeader}>
             <Text style={ep.fieldLabel}>Bio</Text>
-            <Text style={ep.charCount}>{description.length}/500</Text>
+            <Text style={ep.charCount}>{bio.length}/500</Text>
           </View>
           <TextInput
-            value={description}
-            onChangeText={(t) => setDescription(t.slice(0, 500))}
+            value={bio}
+            onChangeText={(t) => setBio(t.slice(0, 500))}
             placeholder="Tell us about yourself"
             placeholderTextColor="#ccc"
             style={ep.input}
@@ -75,33 +114,12 @@ export default function EditProfile() {
           />
         </View>
 
-        {/* Contact Info */}
+        {/* Contact Info (read-only, managed via account settings) */}
         <View style={[ep.sectionCard, { marginTop: 12 }]}>
-          <Pressable style={ep.contactRow}>
-            <Text style={ep.labelText}>Phone</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={ep.contactValue}>**********10</Text>
-              <ChevronRight size={16} color="#ccc" />
-            </View>
-          </Pressable>
-          <Pressable style={[ep.contactRow, { borderBottomWidth: 0 }]}>
+          <View style={ep.contactRow}>
             <Text style={ep.labelText}>Email</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={ep.contactValue}>em*****@gmail.com</Text>
-              <ChevronRight size={16} color="#ccc" />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Update Followers */}
-        <View style={[ep.fieldCard, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-          <Text style={ep.labelText}>Update your followers</Text>
-          <Switch
-            value={updateFollowers}
-            onValueChange={setUpdateFollowers}
-            trackColor={{ false: '#d1d5db', true: '#5998B9' }}
-            thumbColor="white"
-          />
+            <Text style={ep.contactValue}>{user?.email ?? '—'}</Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -136,6 +154,8 @@ const ep = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
   },
   saveHeaderText: {
     fontFamily: 'Poppins_600SemiBold',
@@ -156,6 +176,19 @@ const ep = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
+  },
+  avatarPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4289AB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 20,
+    color: '#fff',
   },
   cameraBadge: {
     position: 'absolute',
@@ -196,8 +229,6 @@ const ep = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },

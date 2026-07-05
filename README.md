@@ -196,6 +196,17 @@ is filled in — creating a checkout before that returns
 `EXPO_PUBLIC_ENABLE_G8_PAY=true` in `.env` once the checkout QR-rendering UI
 is wired up client-side (see "Known limitations" below).
 
+Ganap issues one universal QR Ph (EMV Co Person-to-Merchant) code regardless
+of which wallet app scans it, so **GCash, Maya, and QR Ph are all the same
+checkout flow** client-side (`app/checkout/index.tsx`,
+`components/GCashPaymentModal.tsx`) — there is no separate Maya/QR Ph
+integration to configure. **There is no sandbox/test mode** — this adapter
+talks to the real, live `api.ganap.net`, so scanning a rendered QR with a
+funded wallet moves real money, and this integration has **no refund/payout
+path** (see "G8 Pay / Ganap specifics" below). The client blocks amounts
+outside Ganap's accepted ₱200–₱50,000 range before ever calling the edge
+function.
+
 ### 6. Optional: error reporting / push notifications
 
 - **Sentry**: set `EXPO_PUBLIC_SENTRY_DSN` and wire `@sentry/react-native`
@@ -211,22 +222,21 @@ is wired up client-side (see "Known limitations" below).
 app/
 ├── (auth)/          # Login, signup, onboarding, forgot password
 ├── (tabs)/          # Bottom tab navigator
-│   ├── (store)/     # Home / product feed
-│   ├── (seller)/    # Celebrity & influencer sellers
-│   ├── (charity)/   # Charity auctions & impact
-│   ├── (order)/     # Order tracking
-│   ├── (cart)/      # Shopping cart
+│   ├── (store)/     # Home / live product feed
+│   ├── (seller)/    # Seller storefronts (browse grid is "Coming Soon")
+│   ├── (charity)/   # Charity auctions (Coming Soon) + partner application CTA
+│   ├── (order)/     # Order history (Purchases is real; bidding tabs are Coming Soon)
+│   ├── (cart)/      # Shopping cart (persisted via AsyncStorage)
 │   └── (me)/        # Profile tab
-├── (main)/          # Full-screen modal screens (product detail, messages, wishlist…)
+├── (main)/          # Full-screen modal screens (product detail, Luvlist, checkout-adjacent…)
 ├── (profile)/       # Profile management screens
-├── (seller-dashboard)/   # Seller tools
-├── (seller-registration)/# Seller onboarding
-├── checkout/        # Checkout & payment success
-└── donation/        # Donation flow
+├── (seller-dashboard)/   # Seller tools (Products/Orders/Analytics, all real data)
+├── (seller-registration)/# Seller onboarding (persists to seller_profiles)
+└── checkout/        # Checkout & payment success
 
-components/          # Shared UI components
-features/            # Feature-scoped components and data
-lib/                 # Theme tokens, utility functions
+components/          # Shared UI components (incl. GCashPaymentModal)
+lib/                 # Supabase client, auth/cart context, data-access helpers
+supabase/            # SQL migrations + Edge Functions (G8 Pay)
 assets/images/       # Local assets (logos, onboarding, payment logos, icons)
 ```
 
@@ -305,10 +315,11 @@ npm run ios
 - [ ] Adding/removing a listing from the Luvlist reflects immediately and
       survives a re-fetch; a signed-out user sees the "Sign in" state
       instead of an error.
-- [ ] `g8-pay-create-checkout` returns HTTP 501 with a clear message until
-      the adapter is implemented (expected, not a bug) — once implemented,
-      confirm it creates a `payment_attempts` row before returning a
-      checkout URL.
+- [ ] `g8-pay-create-checkout` creates a real `payment_attempts` row and
+      returns a QR Ph payload for GCash, Maya, and QR Ph alike (same
+      checkout flow, no per-wallet config); an order total outside
+      ₱200–₱50,000 is rejected client-side before the edge function is even
+      called.
 - [ ] Re-sending the same webhook payload twice does not double-process
       (check `payment_webhook_events.processed_at` and that the order/listing
       only transition once).
@@ -319,65 +330,251 @@ npm run ios
 - [ ] A seller cannot directly `UPDATE listings SET status = 'live'` from
       the client (RLS should reject it — only `submit_listing_for_review`
       can do that).
+- [ ] A signed-in buyer cannot create a listing until they've completed
+      seller onboarding (`ShopInfo` → `BusinessInfo`); attempting to insert
+      a listing directly as a buyer is rejected by RLS.
+- [ ] Completing seller onboarding actually flips `profiles.role` to
+      `'seller'` and creates a `seller_profiles` row; running
+      `update profiles set role = 'admin'` as a regular user fails (role
+      self-elevation is blocked).
+- [ ] Adding an item to cart, restarting the app, and reopening the cart
+      shows the same item (cart persists via AsyncStorage).
+- [ ] Selecting items in the cart and checking out with GCash creates a
+      real `orders` + `order_items` row before the QR code appears, and the
+      listing flips to `sold` only after the webhook confirms payment (not
+      immediately on the client).
+- [ ] Checking out with Cash on Delivery also creates a real order (visible
+      in the seller's Orders dashboard).
+- [ ] Submitting the "Become a Partner" form creates a real
+      `partner_applications` row with a reference number derived from the
+      row's actual id (not a timestamp).
 
-## Known limitations / not yet production-ready
+## Production readiness status
 
-Being explicit about what still uses mock data or is left as a clearly
-marked integration point, per the conversion brief:
+This app went through a full conversion pass: every screen was audited,
+mock data was either wired to real Supabase data or replaced with an honest
+"Coming Soon" state, and dead/orphaned screens were removed. Here's where
+things actually stand.
 
-- **Home feed, category/designer/sustainable-brand pages, seller
-  storefronts, cart, and `ProductScreen`** still render local mock arrays,
-  not the real `listings` table. The backend (schema, RLS, `lib/listings.ts`)
-  is ready for this; wiring each screen is a follow-up pass.
-- **The "Go Live" listing creation screen** (`app/(seller-dashboard)/AddProduct.tsx`)
-  is still a UI-only mock — it isn't yet calling `createListingDraft` /
-  `uploadListingImage` / `submitListingForReview` from `lib/listings.ts`.
-- **The Luvlist heart toggle inside `ProductScreen`** is not wired to
-  `addToLuvlist`/`removeFromLuvlist` yet, because most products it's shown
-  on come from the mock arrays above (no real `listing_id` to attach to).
-  The new `app/(main)/LuvlistScreen.tsx` *is* fully wired to Supabase.
-- **G8 Pay (Ganap) integration is implemented end-to-end for GCash**
-  (`supabase/functions/g8-pay-*`, live-tested against `api.ganap.net`).
-  Ganap's checkout returns an EMV "QR Ph" payload string, not a URL —
-  `components/GCashPaymentModal.tsx` renders it as a real QR code and polls
-  `g8-pay-status` every 4s until the webhook confirms payment. Wired into
-  `app/checkout/index.tsx` for the GCash option only (Maya/QR Ph/COD are
-  still the old mock flow, by request).
-  **However**, `checkout/index.tsx` still runs entirely on `MOCK_ORDER`
-  (mock cart data, no real `listings` row behind it), so `MOCK_ORDER.listingId`
-  is empty by default and the modal will show a clear "no real listing
-  linked" message instead of charging anything. To test the real flow:
-  create a Supabase Auth user + a `listings` row for yourself in the
-  Supabase Dashboard's SQL Editor (your own authenticated session — do not
-  do this via a public endpoint), e.g.:
-  ```sql
-  -- Run as yourself in the Supabase Dashboard SQL Editor.
-  -- Find your own user id first: select id, email from auth.users;
-  insert into public.listings (seller_id, title, price, currency, listing_type, status, cover_image_url)
-  values ('<your-own-user-id>', 'Test Item', 12000, 'PHP', 'instant_buy', 'live',
-          'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&q=80')
-  returning id;
-  ```
-  then paste the returned `id` into `MOCK_ORDER.listingId` in
-  `app/checkout/index.tsx`.
+### Fully real, end-to-end
+
+- **Auth**: email/password + Google OAuth (live-tested on device). Facebook
+  is scaffolded in `lib/auth-context.tsx` but shown as "Coming Soon" in the
+  UI, by request.
+- **Profiles**: real Supabase data, avatar upload to a public `profile-images`
+  bucket, edit name/bio — `app/(profile)/EditProfile.tsx`.
+- **Listing creation ("Go Live")**: `app/(seller-dashboard)/AddProduct.tsx`
+  uses a real image picker, uploads to `listing-images`, creates a real
+  draft, and publishes via `submit_listing_for_review` — no more placeholder
+  images or fake charity/auction toggles (those were removed; see below).
+  Only users with `role = 'seller'` can create listings (RLS-enforced).
+- **Home feed**: real live `listings` query (`lib/listings.ts#getLiveListings`),
+  with a polished empty state per section instead of mock products. No more
+  ad banners.
+- **Cart → Checkout → Payment**: a real client-persisted cart
+  (`lib/cart-context.tsx`) references real `listings.id`s. Checkout creates
+  a real `orders` + `order_items` row set (price snapshotted server-side,
+  never trusted from the client), then GCash/Maya/QR Ph payment (one shared
+  QR Ph checkout flow — see "G8 Pay / Ganap specifics" below) charges the
+  server-computed order total via G8 Pay (Ganap) — QR code rendered by
+  `components/GCashPaymentModal.tsx`, confirmed only by the webhook (never
+  the client), which marks every item in the order `sold`. Cash on Delivery
+  also creates a real order.
+- **Delivery / pickup addresses**: real `addresses` table
+  (`app/(profile)/Addresses.tsx`, `AddAddress.tsx`, `lib/addresses.ts`), one
+  default and one pickup address per user (DB-enforced). Seller
+  registration's pickup address step (`ShopInfo.tsx`) reuses the buyer's
+  already-saved addresses instead of forcing a duplicate entry — tapping
+  "Set"/"Change" opens the same address list in a picker mode.
+- **Auctions**: `AddProduct.tsx` creates real `auction`/`charity_auction`
+  listings (starting bid, min increment, reserve price, duration) alongside
+  `instant_buy`. Bidding (`AuctionDetailScreen`, `place_bid()` RPC),
+  `BiddingScreen`, `Auction-Calendar`, and `Winnings` all read real data from
+  the `bids` table; expired auctions close lazily via
+  `close_expired_auctions()` the first time anyone loads the feed (no cron
+  infra exists, so this is intentionally client-triggered).
+- **Draft product editing**: `Products.tsx` — draft/rejected/archived
+  listings are tappable and open `AddProduct.tsx` pre-filled for editing
+  (including swapping/removing photos) instead of being static cards;
+  listing type can't be changed after creation.
+- **Seller verification**: ID/document upload (`lib/verification.ts`) goes
+  to the private `verification-documents` bucket and is only ever read back
+  via a signed, time-limited URL — wired to the real
+  `request_verification()` RPC.
+- **Seller dashboard**: `Products`, `Orders`, and `Analytics` all read real
+  data (your listings, real sales via `order_items`, real revenue/top-seller
+  numbers) — no fabricated stats or fake "Request Payout" button (that was
+  actively misleading, since seller payouts aren't confirmed to be
+  supported by Ganap — see below).
+- **Seller onboarding**: `ShopInfo` → `BusinessInfo` persists to a real
+  `seller_profiles` table and flips `profiles.role` to `'seller'` via the
+  `become_seller()` RPC (buyer → seller only, can't self-elevate to admin).
+- **Buyer order history**: `(tabs)/(order)` "Purchases" tab and
+  `Purchase-History.tsx` read real orders.
+- **Notifications**: real `notifications` table wired up (currently empty
+  until something writes to it — no automated notification-creation is
+  wired yet, e.g. on order paid/shipped; the screen and RLS are ready for
+  that follow-up).
+- **Luvlist**: fully real (unchanged from the prior pass).
+- **Charity partner applications**: `BecomeAPartnerScreen` persists to a
+  real `partner_applications` table with a real reference number, reachable
+  from the Charity tab's "Apply to Become a Partner" button.
+- **Seller storefront**: tapping any seller now goes to a real page
+  (`(tabs)/(seller)/[id].tsx`) showing their live listings, not a mock
+  celebrity profile.
+
+### Deliberately "Coming Soon" (no real backend/infra exists yet)
+
+These render a clean, honest empty state instead of fake data, because
+building them for real requires infrastructure or partnerships beyond this
+pass:
+
+- **Celebrity sellers browse grid** (`(tabs)/(seller)/index.tsx`) — needs
+  real celebrity partner relationships (the individual seller storefront
+  page is real, though).
+- **Charity Auctions** (`(tabs)/(charity)`, `CharityDetailScreen`) — needs
+  real charity partner organizations (the application form is real).
+- **Live selling / streaming** (`LiveSellingScreen`) — no streaming infra.
+- **Direct messaging** (`MessagesScreen`) — no conversations/messages
+  schema yet; this is a real, buildable feature (unlike the two above) but
+  was descoped for time in this pass.
+- **Vouchers** (`VouchersScreen`) — the old checkout discount feature was
+  removed because it couldn't correctly reduce the real G8 Pay charge
+  amount without misleading the buyer about what they'd actually pay.
+
+### G8 Pay / Ganap specifics
+
+- **No sandbox/test mode.** This adapter is confirmed live against the real
+  `api.ganap.net` — there is no separate test environment, so scanning a
+  rendered checkout QR with a funded wallet moves real money. Creating a
+  checkout session (rendering the QR) itself is free; only actually
+  scanning + approving it in a wallet app charges anything.
 - **Ganap has no confirmed status-lookup endpoint and no webhook signature.**
   `getG8PayStatus` falls back to the last known DB state when polling isn't
   possible; payment confirmation only ever arrives via the webhook. Because
-  the webhook is unsigned, integrity is enforced by matching the payload's
-  externalId + amount against an existing, still-pending `payment_attempts`
-  row keyed by an unguessable server-generated UUID — see the comments in
-  `supabase/functions/_shared/g8pay-adapter.ts` for the full reasoning and
-  residual risk.
+  the webhook is unsigned, integrity is enforced by requiring the payload's
+  `externalId` (our own server-generated `payment_attempts.id`) **and**
+  `referenceNumber` **and** `amount` to all match an existing, still-pending
+  row — see `supabase/functions/_shared/g8pay-adapter.ts` and
+  `supabase/functions/g8-pay-webhook/index.ts` for the full reasoning. An
+  attacker would need to correctly guess two independent unguessable values,
+  not just one.
 - **Whether Ganap supports split payments / seller payouts / escrow /
-  delayed capture / refunds is undocumented.** Treat this integration as
-  **buyer payment collection only** — do not build seller payout logic on
-  top of it until Ganap confirms support.
-- **Facebook Login** is scaffolded in `lib/auth-context.tsx`
-  (`signInWithOAuth('facebook')`) but the UI shows it as "Coming Soon" and
-  doesn't call it, by request.
-- **Firebase Cloud Messaging and Sentry** are deferred. The `notifications`
-  table and `lib/observability.ts` integration points exist, but no FCM
-  device registration or Sentry SDK wiring has been added yet.
+  delayed capture / refunds is undocumented.** This integration is
+  **buyer payment collection only** — no seller payout logic exists, and
+  there is no in-app way to reverse a completed payment.
+
+### Smaller known gaps
+
+- No real shipping/fulfillment tracking exists (the old fake progress
+  tracker was removed).
+- `close_expired_auctions()` is callable by any signed-in user rather than
+  only a cron job / service role, since no cron infrastructure exists in
+  this project yet. Not exploitable for tampering (the outcome is fully
+  determined by existing bid data), just worth tightening if/when a real
+  scheduled job is set up.
+
+### Security fixes made during this pass
+
+- **`profiles.role` self-elevation was possible** — any signed-in user
+  could have run `update profiles set role = 'admin'` on their own row. Now
+  blocked by a trigger; `role` can only change via the `become_seller()`
+  RPC (buyer → seller only).
+- **Listing creation didn't require `role = 'seller'`** — any buyer could
+  insert a listing. Now RLS-enforced.
+- Cleaned up ~20 dead/orphaned screen files (duplicates and an entire
+  unused `features/` component library) that had no navigation path to
+  them, several still showing fake data under a real public figure's name
+  and photo.
+- **G8 Pay checkout/status endpoints leaked `provider_transaction_id`
+  (Ganap's `referenceNumber`) to the client.** Since Ganap's webhook has no
+  signature, the webhook handler's only integrity check is "referenceNumber
+  + amount match an existing payment attempt" — a buyer who received their
+  own referenceNumber could forge a `paid` webhook and get an order for
+  free. Both endpoints now strip that field (and `provider_response`) from
+  their client-facing response. **Redeploy required** after pulling this
+  change: `npx supabase functions deploy g8-pay-create-checkout && npx supabase functions deploy g8-pay-status`.
+
+**Turnover pass (this session):**
+
+- Fixed a live bug: `submit_listing_for_review()` failed every publish
+  attempt with `column reference "listing_id" is ambiguous` (SQLSTATE
+  42702) — the function's own parameter name collided with a column name.
+  Fixed and deployed (`20260705000023_fix_submit_listing_ambiguity.sql`).
+- **G8 Pay webhook forgery hardening**: the webhook previously matched
+  incoming events against `payment_attempts` using only
+  `provider_transaction_id` (Ganap's reference number). It now also
+  requires the row's own `id` (echoed back as `externalId`) to match, so an
+  attacker needs to correctly guess two independent unguessable values
+  instead of one. Deployed.
+- Ran a full security pass across SQL migrations, Edge Functions, and
+  client code (RLS policies, role-elevation guards, price/amount handling,
+  webhook integrity, secrets, storage, deep links, injection risk). No
+  other high/medium exploitable issues found — see the "G8 Pay / Ganap
+  specifics" and "Smaller known gaps" sections above for the two
+  low-severity items intentionally left as-is (with rationale).
+- Seller registration's pickup address step now reuses saved addresses
+  instead of forcing a new one every time (see "Delivery / pickup
+  addresses" above).
+- Draft/rejected/archived products are now editable from `Products.tsx`
+  instead of being static cards (see "Draft product editing" above).
+- Enabled Maya and QR Ph as full payment options (previously "Coming
+  Soon") since they share the exact same QR Ph checkout flow as GCash — no
+  separate integration needed.
+- The GCash/Maya/QR Ph payment modal's "I've paid — check now" button now
+  gives explicit feedback ("we haven't received your payment yet...")
+  instead of silently resetting when a payment genuinely isn't confirmed
+  yet.
+
+---
+
+## Ownership transfer checklist
+
+Everything below runs on the current owner's personal Supabase, Expo/EAS,
+Google Cloud, and Ganap accounts. None of this migrates automatically —
+each service needs an explicit handoff or a fresh account + data copy.
+
+**This repo's current live project** (for whoever is receiving the handoff —
+ask the previous owner for actual access/credentials to these, none of the
+values below are secrets):
+
+- **Supabase project**: "Luvlots" (region `ap-southeast-1`). All 23
+  migrations in `supabase/migrations/` are applied; all three `g8-pay-*`
+  Edge Functions are deployed.
+- **GitHub**: this repository, `production-ready` branch is the
+  up-to-date, working state as of this handoff.
+- **Payments**: G8 Pay/Ganap merchant project is live and configured
+  (secrets already set on the Supabase project above) — see "G8 Pay /
+  Ganap specifics" for what that does and doesn't cover.
+
+1. **Supabase** — either (a) add the new owner as a member of the Supabase
+   organization and transfer the project, or (b) have them create a new
+   project and re-run `supabase/migrations/` against it (schema only — this
+   does **not** copy existing rows/files; use `supabase db dump --data-only`
+   or the Dashboard's backup/restore for real user data and
+   `supabase storage` bucket contents). Either way, rotate/regenerate the
+   **service role key** and all Edge Function secrets afterwards — the old
+   owner's copies should be treated as compromised once access changes hands.
+2. **Google Cloud (OAuth)** — add the new owner as an IAM member on the GCP
+   project holding the OAuth 2.0 Client ID (Prerequisites → step 4 above),
+   or create a fresh OAuth client under their own GCP project and update
+   Client ID/Secret in Supabase Dashboard → Authentication → Providers →
+   Google.
+3. **Expo/EAS** — the `extra.eas.projectId` in `app.json` and this app's
+   builds are tied to the current owner's Expo account. Either transfer the
+   project via [expo.dev](https://expo.dev) (Project Settings → Transfer),
+   or have the new owner run `eas init` to link it to their own account
+   (this changes `projectId` — update `app.json` accordingly).
+4. **Ganap (G8 Pay)** — the merchant project UUID + secret key are tied to
+   whoever registered with Ganap. Contact Ganap support to transfer the
+   merchant account, or register a new one and update
+   `G8PAY_MERCHANT_PROJECT_ID` / `G8PAY_SECRET_KEY` (`supabase secrets set`)
+   and the Webhook URL in the Ganap dashboard (see step 5 above).
+5. **Local secrets** — `.env` is gitignored and was never committed (check
+   yourself with `git log --all -- .env`), so it doesn't need "removing"
+   from history — just don't hand over your own `.env` file or Supabase
+   service role key; give the new owner a blank `.env.example` copy and let
+   them fill in their own project's values.
 
 ---
 

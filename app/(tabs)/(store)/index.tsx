@@ -7,23 +7,20 @@ import {
   Dimensions,
   Pressable,
   StyleSheet,
-  Share,
+  ActivityIndicator,
 } from 'react-native';
 import {
   Search,
   Bell,
   ShoppingCart,
   Heart,
-  Clock,
-  Zap,
   Star,
   Tag,
   ChevronRight,
   Flame,
   Sparkles,
   MessageCircle,
-  TrendingUp,
-  Share2,
+  PackageSearch,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,73 +31,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
 
+import { getLiveListings, type LiveListing } from '@/lib/listings';
+import { logError } from '@/lib/observability';
+import { useCart } from '@/lib/cart-context';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const AD_IMAGES = [
-  { src: require('@/assets/images/ads/ad1.jpg'), ratio: 1445 / 379 },
-  { src: require('@/assets/images/ads/ad2.jpg'), ratio: 1451 / 329 },
-];
-
-function AdBanner({ adIndex }: { adIndex: 0 | 1 }) {
-  const { src, ratio } = AD_IMAGES[adIndex];
-  return (
-    <Animated.View entering={FadeIn.duration(500)} style={adStyles.wrap}>
-      <View style={adStyles.adBadge}>
-        <Text style={adStyles.adBadgeText}>AD</Text>
-      </View>
-      <Image
-        source={src}
-        style={[adStyles.image, { aspectRatio: ratio }]}
-        resizeMode="cover"
-      />
-      <Text style={adStyles.sponsoredLabel}>Sponsored</Text>
-    </Animated.View>
-  );
-}
-
-const adStyles = StyleSheet.create({
-  wrap: {
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#F0F3F7',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  image: {
-    width: '100%',
-    height: undefined,
-  },
-  adBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  adBadgeText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 9,
-    color: '#fff',
-    letterSpacing: 0.8,
-  },
-  sponsoredLabel: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    color: '#9CA3AF',
-    textAlign: 'right',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: '#fff',
-  },
-});
 
 const BANNER_DATA = [
   {
@@ -164,232 +100,18 @@ const QUICK_ACTIONS = [
   { id: '6', label: 'Messages', icon: MessageCircle, color: '#4289AB', route: '/(main)/MessagesScreen' as const },
 ];
 
-const AUCTION_ITEMS = [
-  {
-    id: '1',
-    title: 'ASAP Stage Gown',
-    price: '₱9,500.00',
-    timeLeft: '4h 20m',
-    imageUri: 'https://images.unsplash.com/photo-1484327973588-c31f829103fe?w=400&q=80',
-    bids: 14,
-    seller: 'Anne Curtis',
-    sellerId: '1',
-    description: 'Stunning gown worn by Anne Curtis during an ASAP live performance. Authenticated by ABS-CBN Wardrobe.',
-    category: 'Fashion',
-  },
-  {
-    id: '2',
-    title: 'Iconic Fashion Set',
-    price: '₱6,500.00',
-    timeLeft: '2h 10m',
-    imageUri: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
-    bids: 8,
-    seller: 'Mimiyuuuh',
-    sellerId: '4',
-    description: "Outfit worn by Mimiyuuuh in his most-viewed YouTube video with 12M+ views. One of a kind lewk!",
-    category: 'Fashion',
-  },
-  {
-    id: '3',
-    title: 'Diamond Ring',
-    price: '₱45,000.00',
-    timeLeft: '6h 45m',
-    imageUri: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400&q=80',
-    bids: 31,
-    seller: 'Ivana Alawi',
-    sellerId: '5',
-    description: "18k gold diamond ring from Ivana Alawi's personal jewelry collection. Appraisal certificate included.",
-    category: 'Jewelry',
-  },
-  {
-    id: '4',
-    title: 'Film Premiere Gown',
-    price: '₱18,500.00',
-    timeLeft: '1h 30m',
-    imageUri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80',
-    bids: 42,
-    seller: 'Kathryn Bernardo',
-    sellerId: '3',
-    description: "Gown worn by Kathryn Bernardo at a major film premiere. Authenticated by Star Magic.",
-    category: 'Fashion',
-  },
-];
-
-const BEST_SELLERS = [
-  {
-    id: 'p1',
-    name: 'Designer Tote Bag',
-    price: '₱7,000.00',
-    imageUri: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400&q=80',
-    rating: 4.8,
-    sold: 120,
-    seller: 'Anne Curtis',
-    sellerId: '1',
-    description: 'Authentic designer tote bag from Anne Curtis\'s personal wardrobe.',
-    category: 'Fashion',
-  },
-  {
-    id: 'p2',
-    name: "It's Showtime Jacket",
-    price: '₱12,000.00',
-    imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&q=80',
-    rating: 4.9,
-    sold: 85,
-    seller: 'Vice Ganda',
-    sellerId: '2',
-    description: "Stage jacket worn by Vice Ganda on It's Showtime. Certificate of authenticity included.",
-    category: 'Fashion',
-  },
-  {
-    id: 'p3',
-    name: 'Film Premiere Gown',
-    price: '₱18,500.00',
-    imageUri: 'https://images.unsplash.com/photo-1484327973588-c31f829103fe?w=400&q=80',
-    rating: 4.7,
-    sold: 64,
-    seller: 'Kathryn Bernardo',
-    sellerId: '3',
-    description: 'Gown worn by Kathryn Bernardo at a major Star Magic film premiere. Authenticated.',
-    category: 'Fashion',
-  },
-  {
-    id: 'p4',
-    name: 'Limited Collab Sneakers',
-    price: '₱4,200.00',
-    imageUri: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80',
-    rating: 4.6,
-    sold: 32,
-    seller: 'Mimiyuuuh',
-    sellerId: '4',
-    description: 'Limited edition sneaker collab personally picked by Mimiyuuuh.',
-    category: 'Footwear',
-  },
-  {
-    id: 'p5',
-    name: 'Luxury Perfume Set',
-    price: '₱5,500.00',
-    imageUri: 'https://images.unsplash.com/photo-1541643600914-78b084683702?w=400&q=80',
-    rating: 4.9,
-    sold: 48,
-    seller: 'Ivana Alawi',
-    sellerId: '5',
-    description: 'Luxury perfume set from Ivana Alawi\'s personal collection. Seen in her vlogs.',
-    category: 'Beauty',
-  },
-  {
-    id: 'p6',
-    name: 'Signed MAC Collab Palette',
-    price: '₱7,800.00',
-    imageUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&q=80',
-    rating: 4.8,
-    sold: 95,
-    seller: 'Bretman Rock',
-    sellerId: '6',
-    description: 'Bretman Rock signed MAC collaboration makeup palette. Hand-signed and authenticated.',
-    category: 'Beauty',
-  },
-  {
-    id: 'p7',
-    name: 'Vlog Prank Outfit',
-    price: '₱4,500.00',
-    imageUri: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
-    rating: 4.5,
-    sold: 73,
-    seller: 'Alex Gonzaga',
-    sellerId: '7',
-    description: 'Iconic outfit worn in Alex Gonzaga\'s most viral prank vlog.',
-    category: 'Fashion',
-  },
-  {
-    id: 'p8',
-    name: 'Music Video Jacket',
-    price: '₱3,800.00',
-    imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&q=80',
-    rating: 4.9,
-    sold: 21,
-    seller: 'Donnalyn Bartolome',
-    sellerId: '8',
-    description: 'Jacket worn by Donnalyn Bartolome during her debut music video shoot.',
-    category: 'Fashion',
-  },
-];
-
-const TRENDING_ITEMS = [
-  {
-    id: 't1',
-    name: 'Designer Sunglasses',
-    price: '₱5,200.00',
-    imageUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&q=80',
-    rating: 4.7,
-    sold: 58,
-    seller: 'Bretman Rock',
-    sellerId: '6',
-    description: 'Exclusive designer sunglasses from Bretman Rock\'s personal collection.',
-    category: 'Accessories',
-  },
-  {
-    id: 't2',
-    name: 'Diamond Ring',
-    price: '₱45,000.00',
-    imageUri: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400&q=80',
-    rating: 4.8,
-    sold: 34,
-    seller: 'Ivana Alawi',
-    sellerId: '5',
-    description: '18k gold diamond ring from Ivana Alawi\'s personal jewelry collection.',
-    category: 'Jewelry',
-  },
-  {
-    id: 't3',
-    name: 'Signed Concert Poster',
-    price: '₱2,100.00',
-    imageUri: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&q=80',
-    rating: 4.6,
-    sold: 67,
-    seller: 'Anne Curtis',
-    sellerId: '1',
-    description: 'Personally signed Anne Curtis concert poster with authentication certificate.',
-    category: 'Collectibles',
-  },
-  {
-    id: 't4',
-    name: 'KathNiel Collab Bracelet',
-    price: '₱2,800.00',
-    imageUri: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400&q=80',
-    rating: 5.0,
-    sold: 12,
-    seller: 'Kathryn Bernardo',
-    sellerId: '3',
-    description: 'Limited KathNiel collaboration bracelet personally authenticated by Kathryn Bernardo.',
-    category: 'Jewelry',
-  },
-];
-
-function navigateToProduct(item: {
-  id: string;
-  name: string;
-  price: string;
-  imageUri: string;
-  rating: number;
-  sold: number;
-  seller: string;
-  sellerId: string;
-  description: string;
-  category: string;
-}) {
+function navigateToProduct(item: LiveListing) {
   router.push({
     pathname: '/(main)/ProductScreen',
     params: {
       id: item.id,
-      name: item.name,
-      price: item.price,
-      imageUri: item.imageUri,
-      rating: String(item.rating),
-      sold: String(item.sold),
-      seller: item.seller,
-      sellerId: item.sellerId,
-      description: item.description,
-      category: item.category,
+      name: item.title,
+      price: `${item.currency} ${item.price.toLocaleString()}`,
+      imageUri: item.cover_image_url ?? '',
+      seller: item.seller?.full_name ?? item.seller?.username ?? 'LUVLOTS Seller',
+      sellerId: item.seller_id,
+      description: item.description ?? '',
+      category: item.categories?.name ?? '',
     },
   } as any);
 }
@@ -457,15 +179,48 @@ function LuvProductButton({ isLuved, onToggle }: { isLuved: boolean; onToggle: (
   );
 }
 
+function EmptySection({ message }: { message: string }) {
+  return (
+    <View style={styles.emptySection}>
+      <PackageSearch size={28} color="#CBD5E1" />
+      <Text style={styles.emptySectionText}>{message}</Text>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const [searchText, setSearchText] = useState('');
   const [activeBanner, setActiveBanner] = useState(0);
   const [luvItems, setLuvItems] = useState<Record<string, boolean>>({});
+  const [auctionListings, setAuctionListings] = useState<LiveListing[]>([]);
+  const [newArrivals, setNewArrivals] = useState<LiveListing[]>([]);
+  const [loadingListings, setLoadingListings] = useState(true);
+  const { listingIds: cartListingIds } = useCart();
+  const cartCount = cartListingIds.length;
 
   const toggleLuv = useCallback((itemId: string) => {
     setLuvItems((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
   }, []);
+
+  const loadListings = useCallback(async () => {
+    setLoadingListings(true);
+    try {
+      const [auctions, general] = await Promise.all([
+        getLiveListings({ listingType: 'auction', limit: 10 }),
+        getLiveListings({ limit: 20 }),
+      ]);
+      setAuctionListings(auctions);
+      setNewArrivals(general);
+    } catch (error) {
+      logError(error, { area: 'HomeScreen.loadListings' });
+    } finally {
+      setLoadingListings(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadListings();
+  }, [loadListings]);
 
   return (
     <View style={styles.container}>
@@ -504,9 +259,11 @@ export default function HomeScreen() {
                 hitSlop={8}
                 style={styles.headerIconBtn}>
                 <ShoppingCart size={21} color="#fff" />
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>2</Text>
-                </View>
+                {cartCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{cartCount}</Text>
+                  </View>
+                )}
               </Pressable>
             </View>
           </View>
@@ -618,177 +375,96 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.sectionTitle}>Auctions</Text>
             </View>
-            <Pressable
-              style={styles.seeAllBtn}
-              onPress={() => router.push('/(main)/BiddingScreen')}>
-              <Text style={styles.seeAllText}>See All</Text>
-              <ChevronRight size={14} color="#4289AB" />
-            </Pressable>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
-            {AUCTION_ITEMS.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => router.push({ pathname: '/(main)/LiveSellingScreen', params: { productId: item.id } } as any)}
-                style={({ pressed }) => [styles.auctionCard, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]}>
-                <View style={{ position: 'relative' }}>
-                  <Image
-                    source={{ uri: item.imageUri }}
-                    style={styles.auctionImage}
-                    resizeMode="cover"
-                  />
-                  {/* Timer badge */}
-                  <View style={styles.timerBadge}>
-                    <Clock size={10} color="#fff" />
-                    <Text style={styles.timerText}>{item.timeLeft}</Text>
+          {loadingListings ? (
+            <ActivityIndicator style={{ paddingVertical: 24 }} color="#4289AB" />
+          ) : auctionListings.length === 0 ? (
+            <EmptySection message="Live bidding auctions are coming soon." />
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+              {auctionListings.map((item) => (
+                <Pressable
+                  key={item.id}
+                  onPress={() => navigateToProduct(item)}
+                  style={({ pressed }) => [styles.auctionCard, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]}>
+                  <View style={{ position: 'relative' }}>
+                    <Image
+                      source={{ uri: item.cover_image_url ?? undefined }}
+                      style={styles.auctionImage}
+                      resizeMode="cover"
+                    />
+                    <LuvOverlayButton
+                      isLuved={!!luvItems[`auction-${item.id}`]}
+                      onToggle={() => toggleLuv(`auction-${item.id}`)}
+                    />
                   </View>
-                  {/* Share — top left */}
-                  <Pressable
-                    onPress={() => Share.share({ message: `Check out "${item.title}" on luvlots! ${item.price}`, title: item.title })}
-                    hitSlop={10}
-                    style={styles.shareOverlayBtn}>
-                    <Share2 size={13} color="#fff" />
-                  </Pressable>
-                  {/* Luv it — top right */}
-                  <LuvOverlayButton
-                    isLuved={!!luvItems[`auction-${item.id}`]}
-                    onToggle={() => toggleLuv(`auction-${item.id}`)}
-                  />
-                </View>
-                <View style={styles.auctionInfo}>
-                  <Text style={styles.auctionName} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.auctionPrice}>{item.price}</Text>
-                  <View style={styles.auctionMeta}>
-                    <Text style={styles.metaText}>{item.bids} bids</Text>
-                    <View style={styles.metaDot} />
-                    <Text style={styles.metaText} numberOfLines={1}>{item.seller}</Text>
+                  <View style={styles.auctionInfo}>
+                    <Text style={styles.auctionName} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.auctionPrice}>{item.currency} {item.price.toLocaleString()}</Text>
+                    <View style={styles.auctionMeta}>
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {item.seller?.full_name ?? item.seller?.username ?? 'LUVLOTS Seller'}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
         </Animated.View>
 
-        <AdBanner adIndex={0} />
-
-        {/* Best Sellers / Product Grid */}
+        {/* New Arrivals */}
         <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.sectionWhite}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Sparkles size={17} color="#D9AC4E" />
-              <Text style={styles.sectionTitle}>Best Sellers</Text>
+              <Text style={styles.sectionTitle}>New Arrivals</Text>
             </View>
-            <Pressable style={styles.seeAllBtn} onPress={() => router.push('/(tabs)/(seller)' as any)}>
-              <Text style={styles.seeAllText}>See All</Text>
-              <ChevronRight size={14} color="#4289AB" />
-            </Pressable>
           </View>
 
-          <View style={styles.productGrid}>
-            {BEST_SELLERS.map((item, index) => (
-              <Animated.View
-                key={item.id}
-                entering={FadeInUp.delay(250 + index * 60).duration(400)}
-                style={styles.productCard}>
-                <View>
-                  <Pressable
-                    onPress={() => navigateToProduct(item)}
-                    style={({ pressed }) => pressed && { opacity: 0.88 }}>
-                    <Image
-                      source={{ uri: item.imageUri }}
-                      style={styles.productImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.productInfo}>
-                      <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-                      <Text style={styles.productPrice}>{item.price}</Text>
-                      <View style={styles.productMeta}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Star size={10} color="#FFB300" fill="#FFB300" />
-                          <Text style={styles.ratingText}>{item.rating}</Text>
-                        </View>
-                        <Text style={styles.soldText}>{item.sold} sold</Text>
+          {loadingListings ? (
+            <ActivityIndicator style={{ paddingVertical: 24 }} color="#4289AB" />
+          ) : newArrivals.length === 0 ? (
+            <EmptySection message="No listings yet — check back soon!" />
+          ) : (
+            <View style={styles.productGrid}>
+              {newArrivals.map((item, index) => (
+                <Animated.View
+                  key={item.id}
+                  entering={FadeInUp.delay(250 + index * 60).duration(400)}
+                  style={styles.productCard}>
+                  <View>
+                    <Pressable
+                      onPress={() => navigateToProduct(item)}
+                      style={({ pressed }) => pressed && { opacity: 0.88 }}>
+                      <Image
+                        source={{ uri: item.cover_image_url ?? undefined }}
+                        style={styles.productImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.productInfo}>
+                        <Text style={styles.productName} numberOfLines={2}>{item.title}</Text>
+                        <Text style={styles.productPrice}>{item.currency} {item.price.toLocaleString()}</Text>
+                        {item.categories?.name ? (
+                          <Text style={styles.soldText} numberOfLines={1}>{item.categories.name}</Text>
+                        ) : null}
                       </View>
-                    </View>
-                  </Pressable>
-                  {/* Share overlay on image */}
-                  <Pressable
-                    onPress={() => Share.share({ message: `Check out "${item.name}" on luvlots! ${item.price}`, title: item.name })}
-                    hitSlop={10}
-                    style={styles.shareOverlayBtn}>
-                    <Share2 size={13} color="#fff" />
-                  </Pressable>
-                </View>
-                {/* ── Luv it only ── */}
-                <View style={styles.productActions}>
-                  <LuvProductButton
-                    isLuved={!!luvItems[`product-${item.id}`]}
-                    onToggle={() => toggleLuv(`product-${item.id}`)}
-                  />
-                </View>
-              </Animated.View>
-            ))}
-          </View>
-        </Animated.View>
-
-        <AdBanner adIndex={1} />
-
-        {/* Trending Now */}
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.sectionWhite}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <TrendingUp size={17} color="#E91E63" />
-              <Text style={styles.sectionTitle}>Trending Now</Text>
-            </View>
-            <Pressable style={styles.seeAllBtn} onPress={() => router.push('/(main)/BiddingScreen' as any)}>
-              <Text style={styles.seeAllText}>See All</Text>
-              <ChevronRight size={14} color="#4289AB" />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}>
-            {TRENDING_ITEMS.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => navigateToProduct(item)}
-                style={styles.trendingCard}>
-                <View style={{ position: 'relative' }}>
-                  <Image
-                    source={{ uri: item.imageUri }}
-                    style={styles.trendingImage}
-                    resizeMode="cover"
-                  />
-                  <LuvOverlayButton
-                    isLuved={!!luvItems[`trending-${item.id}`]}
-                    onToggle={() => toggleLuv(`trending-${item.id}`)}
-                  />
-                  <Pressable
-                    onPress={() => Share.share({ message: `Check out "${item.name}" on luvlots! ${item.price}`, title: item.name })}
-                    hitSlop={10}
-                    style={styles.shareOverlayBtn}>
-                    <Share2 size={13} color="#fff" />
-                  </Pressable>
-                </View>
-                <View style={styles.trendingInfo}>
-                  <Text style={styles.trendingName} numberOfLines={2}>{item.name}</Text>
-                  <Text style={styles.trendingPrice}>{item.price}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                    <Star size={10} color="#FFB300" fill="#FFB300" />
-                    <Text style={styles.ratingText}>{item.rating}</Text>
-                    <Text style={[styles.ratingText, { color: '#CCC', marginHorizontal: 2 }]}>·</Text>
-                    <Text style={styles.soldText}>{item.sold} sold</Text>
+                    </Pressable>
                   </View>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
+                  <View style={styles.productActions}>
+                    <LuvProductButton
+                      isLuved={!!luvItems[`product-${item.id}`]}
+                      onToggle={() => toggleLuv(`product-${item.id}`)}
+                    />
+                  </View>
+                </Animated.View>
+              ))}
+            </View>
+          )}
         </Animated.View>
       </ScrollView>
 
@@ -800,6 +476,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F3EF',
+  },
+  emptySection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    gap: 8,
+  },
+  emptySectionText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   header: {
     paddingHorizontal: 16,

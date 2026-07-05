@@ -583,34 +583,44 @@ values below are secrets):
   (secrets already set on the Supabase project above) — see "G8 Pay /
   Ganap specifics" for what that does and doesn't cover.
 
-1. **Supabase** — either (a) add the new owner as a member of the Supabase
-   organization and transfer the project, or (b) have them create a new
-   project and re-run `supabase/migrations/` against it (schema only — this
-   does **not** copy existing rows/files; use `supabase db dump --data-only`
-   or the Dashboard's backup/restore for real user data and
-   `supabase storage` bucket contents). Either way, rotate/regenerate the
-   **service role key** and all Edge Function secrets afterwards — the old
-   owner's copies should be treated as compromised once access changes hands.
-2. **Google Cloud (OAuth)** — add the new owner as an IAM member on the GCP
-   project holding the OAuth 2.0 Client ID (Prerequisites → step 4 above),
-   or create a fresh OAuth client under their own GCP project and update
-   Client ID/Secret in Supabase Dashboard → Authentication → Providers →
-   Google.
-3. **Expo/EAS** — the `extra.eas.projectId` in `app.json` and this app's
-   builds are tied to the current owner's Expo account. Either transfer the
-   project via [expo.dev](https://expo.dev) (Project Settings → Transfer),
-   or have the new owner run `eas init` to link it to their own account
-   (this changes `projectId` — update `app.json` accordingly).
-4. **Ganap (G8 Pay)** — the merchant project UUID + secret key are tied to
-   whoever registered with Ganap. Contact Ganap support to transfer the
-   merchant account, or register a new one and update
-   `G8PAY_MERCHANT_PROJECT_ID` / `G8PAY_SECRET_KEY` (`supabase secrets set`)
-   and the Webhook URL in the Ganap dashboard (see step 5 above).
+**Recommended: the new owner creates their own accounts rather than
+inheriting the previous owner's** — accepting org/IAM membership on
+someone else's personal Supabase or Google Cloud account just means the
+app keeps sitting on *their* account, revocable at their discretion, which
+defeats the point of a handoff.
+
+1. **Supabase** — new owner creates their own project and re-runs
+   `supabase/migrations/` against it (schema only — this does **not** copy
+   existing rows/files; use `supabase db dump --data-only` or the
+   Dashboard's backup/restore for real user data and `supabase storage`
+   bucket contents if there's production data worth keeping). Do **not**
+   add them as a member of the previous owner's Supabase organization.
+   Afterwards, the previous owner should rotate/regenerate their
+   **service role key** and all Edge Function secrets — treat those as
+   compromised once access changes hands.
+2. **Google Cloud (OAuth)** — new owner creates their own GCP project and
+   OAuth 2.0 Client ID (Prerequisites → step 4 above), then sets it in
+   their own Supabase Dashboard → Authentication → Providers → Google. Do
+   **not** add them as an IAM member on the previous owner's GCP project.
+3. **Expo/EAS** — new owner runs `eas init` under their own Expo account
+   to link the project (this changes `extra.eas.projectId` in `app.json` —
+   update and commit that change). Avoid an Expo project transfer, which
+   would keep builds tied to the login history of the transferring account.
+4. **Ganap (G8 Pay)** — this one genuinely can't be self-served; the
+   merchant account is tied to the Luvlots business entity itself. Ask
+   **David or Ms. Julia (CEO of Luvlots)** for the existing merchant
+   credentials, or to sponsor a new merchant application under Luvlots'
+   name — then set `G8PAY_MERCHANT_PROJECT_ID` / `G8PAY_SECRET_KEY`
+   (`supabase secrets set`) and the Webhook URL in the Ganap dashboard (see
+   step 5 above) against the new owner's own Supabase project.
 5. **Local secrets** — `.env` is gitignored and was never committed (check
    yourself with `git log --all -- .env`), so it doesn't need "removing"
    from history — just don't hand over your own `.env` file or Supabase
    service role key; give the new owner a blank `.env.example` copy and let
    them fill in their own project's values.
+6. **GitHub repository** — the new owner should **clone**, not push to,
+   this repository. See [HANDOVER.md](HANDOVER.md) Section 6 for exactly
+   how to move to their own repo without needing write access here.
 
 ---
 

@@ -46,10 +46,9 @@ tied to their personal accounts. Create your own for:
 | [Expo / EAS](https://expo.dev) | Building the Android APK/AAB, managing env vars | Yes (build minutes limited) |
 | [Ganap](https://ganap.net) (G8 Pay) | Payment processing (GCash/Maya/QR Ph) | Ask Ganap for merchant onboarding — **this is a live payments provider, not a sandbox** |
 
-The previous owner can optionally transfer their existing Supabase project,
-GCP OAuth client, and Expo project to you instead of starting fresh (see
-README's "Ownership transfer checklist" for the transfer-vs-recreate
-tradeoffs). If you're recreating from scratch, follow the steps below.
+**Create your own accounts rather than accepting access to the previous
+owner's** — see Section 5 below for why. Follow the steps below on your
+own new accounts.
 
 ---
 
@@ -223,24 +222,79 @@ including RLS/security checks worth running with two separate accounts.
 
 ## 5. What to ask the previous owner for
 
-If you're transferring rather than recreating from scratch, ask for:
-- Supabase organization membership + project transfer (or a data-only
-  export if you're doing a fresh project — schema alone doesn't include
-  existing rows/files).
-- Being added as an IAM member on their Google Cloud project, or have them
-  hand you the OAuth Client ID/Secret directly so you can move it to your
-  own Supabase provider config.
-- Expo project transfer via [expo.dev](https://expo.dev) → Project
-  Settings → Transfer.
-- Ganap merchant account transfer (contact Ganap support directly).
+**Recommended: create fully independent accounts, don't inherit the
+previous owner's.** Section 3 above already walks through creating your
+own Supabase project, Google Cloud project, and Expo/EAS account from
+scratch — that's the default path, not a fallback. Being added as a
+member/collaborator on someone else's personal Supabase organization or
+Google Cloud project means the app is still ultimately sitting on *their*
+account, under *their* billing, revocable at *their* discretion. For a
+real ownership handoff, don't do that — stand up your own accounts (Step
+2, 3, and 6 in Section 3) and only ask the previous owner for what's
+needed to move data across, not for standing access:
 
-Once access changes hands, **rotate the Supabase service role key and all
-Edge Function secrets** — treat the previous owner's copies as compromised
-the moment they're no longer the only person with access.
+- **Supabase**: don't accept an invite to their organization. Create your
+  own project (Section 3, Step 2), run the migrations yourself, and — only
+  if there's real production data worth keeping — ask for a data-only
+  export (`supabase db dump --data-only`) and storage bucket contents to
+  import into your own project. Schema alone (the migrations in this
+  repo) doesn't need anything from them at all.
+- **Google Cloud (OAuth)**: don't accept IAM membership on their project.
+  Create your own Google Cloud project and OAuth Client ID (Section 3,
+  Step 3) — this takes a few minutes and costs nothing. The only reason to
+  ask the previous owner for anything here is if you want to preserve
+  existing users' Google sign-in without forcing a re-consent, which
+  usually isn't worth the ongoing dependency on their account.
+- **Expo/EAS**: same logic — run `eas init` under your own Expo account
+  (Section 3, Step 6) rather than accepting an Expo project transfer, so
+  builds and app-store submissions are never tied to someone else's login.
+- **Ganap (G8 Pay) merchant account**: this one **can't be self-served** —
+  merchant onboarding has to go through Ganap directly, and the current
+  merchant account may be tied to Luvlots' business entity rather than any
+  one person. **Ask David or Ms. Julia (CEO of Luvlots)** to either
+  provide the existing Ganap merchant credentials for this business, or
+  sponsor/introduce a new merchant application under Luvlots' name.
+
+Once you're on your own accounts, ask the previous owner to **revoke
+whatever access they currently hold** (remove themselves as a Supabase
+project member, delete their local `.env`/service role key, etc.) — don't
+leave dual access lying around after a handoff.
 
 ---
 
-## 6. Where to go next
+## 6. Repository access — clone it, do not push to it
+
+This repository (`github.com/Niiflheim01/LUVLOTS_FWDP`) stays under the
+previous owner's personal GitHub account.
+
+> **Do not push commits, branches, or tags to this repository.** Clone it
+> to get the code, then move to your own repository for all future work —
+> see the two options below.
+
+1. **Clone it** to get the code:
+   ```bash
+   git clone https://github.com/Niiflheim01/LUVLOTS_FWDP.git
+   ```
+2. Create your **own** repository (on your own GitHub account or your
+   organization's), then repoint your local clone's remote at it instead
+   of pushing back to the original:
+   ```bash
+   git remote remove origin
+   git remote add origin <your-new-repo-url>
+   git push -u origin final-handover   # or whichever branch you're continuing from
+   ```
+   Alternatively, use GitHub's **Fork** button on the original repo — that
+   creates your own copy automatically without needing collaborator access
+   at all.
+
+If you were invited as a collaborator on the original repo for the
+handoff, that access should be **read-only**, and should be revoked once
+you've cloned and moved to your own copy — it's meant to get the code to
+you, not to be an ongoing shared repo.
+
+---
+
+## 7. Where to go next
 
 - [README.md](README.md) — full technical reference: schema, RLS policies,
   the G8 Pay adapter's known limitations, project structure, and the
